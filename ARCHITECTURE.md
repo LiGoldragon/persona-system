@@ -51,7 +51,7 @@ This repo does not own:
 - delivery decisions (`persona-router`);
 - harness lifecycle (`persona-harness`);
 - terminal PTY transport (`persona-wezterm`);
-- shared frame definitions (`persona-signal`);
+- shared frame definitions (`signal-persona`);
 - durable transaction ordering (`persona-store`).
 
 ## 4 · Invariants
@@ -73,4 +73,4 @@ tests/         smoke tests for typed observations
 
 - `../persona-router/ARCHITECTURE.md`
 - `../persona-harness/ARCHITECTURE.md`
-- `../persona-signal/ARCHITECTURE.md`
+- `../signal-persona/ARCHITECTURE.md`
