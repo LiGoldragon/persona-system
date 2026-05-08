@@ -12,6 +12,16 @@ publish      = false
 name = "persona_system"
 path = "src/lib.rs"
 
+[[bin]]
+name = "system"
+path = "src/main.rs"
+
+[dependencies]
+nota-codec = { path = "../nota-codec" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+
 [lints.rust]
 unsafe_code = "forbid"
 unused = "warn"

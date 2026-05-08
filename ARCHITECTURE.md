@@ -27,6 +27,9 @@ flowchart LR
 
 - typed target identity for windows, panes, and harness surfaces;
 - focus-state observations;
+- a `system` CLI for one-shot focus probes and focus subscriptions;
+- a Niri focus source backed by `niri msg --json windows` and
+  `niri msg --json event-stream`;
 - prompt/input-buffer observations;
 - event subscription surfaces for consumers;
 - backend adapter traits or data-bearing adapter objects.
@@ -58,6 +61,8 @@ This repo does not own:
 
 - Producers push events; consumers subscribe.
 - Backend-specific details stay behind data-bearing adapter objects.
+- Niri window id is the first real target key; title, app id, and pid are
+  evidence, not identity.
 - The router receives observations and decides policy.
 - Unknown system state is explicit typed state, not a reason to poll.
 
@@ -66,6 +71,8 @@ This repo does not own:
 ```text
 src/target.rs  portable target identity
 src/event.rs   focus/input observation records
+src/niri.rs    Niri focus snapshot and event-stream adapter
+src/command.rs NOTA CLI command surface
 tests/         smoke tests for typed observations
 ```
 

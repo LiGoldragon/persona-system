@@ -3,10 +3,11 @@
 
   inputs = {
     nixpkgs.url = "github:LiGoldragon/nixpkgs?ref=main";
+    nota-codec.url = "github:LiGoldragon/nota-codec";
   };
 
   outputs =
-    { self, nixpkgs }:
+    { self, nixpkgs, nota-codec }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       forSystems = function: nixpkgs.lib.genAttrs systems (system: function system nixpkgs.legacyPackages.${system});
@@ -19,7 +20,15 @@
             pname = "persona-system";
             version = "0.1.0";
             src = ./.;
-            cargoLock.lockFile = ./Cargo.lock;
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              outputHashes = {
+                "nota-derive-0.1.0" = "sha256-se8zZsYzYlIJr75Q+i88k0EfUkRA/cEFafozBKfmlHY=";
+              };
+            };
+            postPatch = ''
+              cp -R ${nota-codec.outPath} ../nota-codec
+            '';
           };
         }
       );

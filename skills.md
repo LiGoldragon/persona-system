@@ -9,6 +9,8 @@ Rules for work here:
 - Keep backend handles inside data-bearing adapter objects.
 - Keep routing decisions in `persona-router`.
 - Keep terminal PTY byte transport in `persona-wezterm`.
+- Use `niri msg --json windows` for current-state focus probes and
+  `niri msg --json event-stream` for pushed focus changes. Filter by tracked
+  `NiriWindow` id before emitting Persona observations.
 - Escalate if a backend cannot push the needed event; do not add polling as a
   fallback.
-
