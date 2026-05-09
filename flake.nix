@@ -113,7 +113,7 @@
         let
           context = mkContext system;
         in
-        context.pkgs.nixfmt-rfc-style
+        context.pkgs.nixfmt
       );
     };
 }
