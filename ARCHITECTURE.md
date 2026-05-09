@@ -3,8 +3,8 @@
 *Portable OS, window-manager, focus, and input-observation boundary.*
 
 `persona-system` names what Persona needs from the operating system without
-forcing router, harness, or store code to know about Niri, Wayland, macOS, or
-any other backend.
+forcing router or harness code to know about Niri, Wayland, macOS, or any other
+backend.
 
 ---
 
@@ -17,8 +17,8 @@ policy and it does not move terminal bytes.
 flowchart LR
     "Niri backend" -->|"focus events"| "SystemAdapter"
     "input recognizer" -->|"buffer events"| "SystemAdapter"
-    "SystemAdapter" -->|"SystemEvent Frame"| "persona-router"
-    "SystemAdapter" -->|"observation records"| "persona-store"
+    "SystemAdapter" -->|"observation frame"| "signal-persona-system"
+    "signal-persona-system" -->|"pushed observation"| "persona-router"
 ```
 
 ## 1 · Component Surface
@@ -38,8 +38,8 @@ flowchart LR
 
 The component owns observations and subscriptions. Backend adapters may keep
 backend-specific handles, sockets, or registration state. Durable observation
-history is committed through `persona-store` when the assembled runtime needs
-it.
+history is not owned here; consumers that need history persist it through their
+own `persona-sema`-backed state.
 
 ## 3 · Boundaries
 
@@ -54,8 +54,8 @@ This repo does not own:
 - delivery decisions (`persona-router`);
 - harness lifecycle (`persona-harness`);
 - terminal PTY transport (`persona-wezterm`);
-- shared frame definitions (`signal-persona`);
-- durable transaction ordering (`persona-store`).
+- system frame definitions (`signal-persona-system`);
+- durable transaction ordering for consumers.
 
 ## 4 · Invariants
 
@@ -81,3 +81,4 @@ tests/         smoke tests for typed observations
 - `../persona-router/ARCHITECTURE.md`
 - `../persona-harness/ARCHITECTURE.md`
 - `../signal-persona/ARCHITECTURE.md`
+- `../signal-persona-system/ARCHITECTURE.md`
