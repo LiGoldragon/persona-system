@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use nota_codec::{Decoder, NotaDecode, NotaRecord, NotaSum};
 
-use crate::error::{PersonaSystemError, Result};
+use crate::error::{Error, Result};
 use crate::{NiriFocusSource, SystemTarget};
 
 #[derive(NotaRecord, Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,13 +67,13 @@ impl CommandLine {
 
     pub fn decode_input(&self) -> Result<Input> {
         let Some(first) = self.arguments.first() else {
-            return Err(PersonaSystemError::MissingInput);
+            return Err(Error::MissingInput);
         };
         self.require_single_argument()?;
 
         if CommandLineArgument::new(first).starts_inline_record() {
             let Some(text) = first.to_str() else {
-                return Err(PersonaSystemError::InvalidInlineNotaArgument {
+                return Err(Error::InvalidInlineNotaArgument {
                     got: format!("{first:?}"),
                 });
             };
@@ -85,7 +85,7 @@ impl CommandLine {
 
     fn require_single_argument(&self) -> Result<()> {
         if let Some(argument) = self.arguments.get(1) {
-            return Err(PersonaSystemError::UnexpectedArgument {
+            return Err(Error::UnexpectedArgument {
                 got: argument.to_string_lossy().to_string(),
             });
         }
@@ -122,11 +122,9 @@ impl InputFile {
     }
 
     fn decode(&self) -> Result<Input> {
-        let text = std::fs::read_to_string(&self.path).map_err(|source| {
-            PersonaSystemError::InputFileRead {
-                path: self.path.clone(),
-                source,
-            }
+        let text = std::fs::read_to_string(&self.path).map_err(|source| Error::InputFileRead {
+            path: self.path.clone(),
+            source,
         })?;
         Input::from_nota(&text)
     }

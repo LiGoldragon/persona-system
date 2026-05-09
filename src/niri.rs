@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 
 use serde::Deserialize;
 
-use crate::error::{PersonaSystemError, Result};
+use crate::error::{Error, Result};
 use crate::{FocusObservation, NiriWindowId, SystemTarget};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +30,7 @@ impl NiriFocusSource {
             .args(["msg", "--json", "windows"])
             .output()?;
         if !output.status.success() {
-            return Err(PersonaSystemError::NiriCommandFailed {
+            return Err(Error::NiriCommandFailed {
                 detail: String::from_utf8_lossy(&output.stderr).to_string(),
             });
         }
@@ -42,9 +42,7 @@ impl NiriFocusSource {
         let id = self.require_niri_window(target)?;
         let mut tracker = FocusTracker::new(target, id);
         let windows = self.current_windows()?;
-        let initial_window = windows
-            .window(id)
-            .ok_or(PersonaSystemError::TargetNotFound { target })?;
+        let initial_window = windows.window(id).ok_or(Error::TargetNotFound { target })?;
         let initial = tracker.accept_window(initial_window);
         writeln!(output, "{}", initial.to_nota())?;
         output.flush()?;
@@ -53,13 +51,12 @@ impl NiriFocusSource {
             .args(["msg", "--json", "event-stream"])
             .stdout(Stdio::piped())
             .spawn()?;
-        let stdout =
-            process
-                .stdout
-                .take()
-                .ok_or_else(|| PersonaSystemError::NiriCommandFailed {
-                    detail: "niri event-stream did not expose stdout".to_string(),
-                })?;
+        let stdout = process
+            .stdout
+            .take()
+            .ok_or_else(|| Error::NiriCommandFailed {
+                detail: "niri event-stream did not expose stdout".to_string(),
+            })?;
         for line in std::io::BufReader::new(stdout).lines() {
             let line = line?;
             let event = NiriEvent::from_json_str(&line)?;
@@ -76,7 +73,7 @@ impl NiriFocusSource {
             .args(["msg", "--json", "windows"])
             .output()?;
         if !output.status.success() {
-            return Err(PersonaSystemError::NiriCommandFailed {
+            return Err(Error::NiriCommandFailed {
                 detail: String::from_utf8_lossy(&output.stderr).to_string(),
             });
         }
@@ -84,11 +81,9 @@ impl NiriFocusSource {
     }
 
     fn require_niri_window(&self, target: SystemTarget) -> Result<NiriWindowId> {
-        target
-            .niri_window_id()
-            .ok_or(PersonaSystemError::UnsupportedBackend {
-                backend: format!("{target:?}"),
-            })
+        target.niri_window_id().ok_or(Error::UnsupportedBackend {
+            backend: format!("{target:?}"),
+        })
     }
 }
 
@@ -109,7 +104,7 @@ impl NiriWindows {
             .windows
             .iter()
             .find(|window| window.id == id.value())
-            .ok_or(PersonaSystemError::TargetNotFound { target })?;
+            .ok_or(Error::TargetNotFound { target })?;
         Ok(window.observation(target))
     }
 

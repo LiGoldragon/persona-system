@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 #[derive(thiserror::Error, Debug)]
-pub enum PersonaSystemError {
+pub enum Error {
     #[error("unsupported system backend: {backend}")]
     UnsupportedBackend { backend: String },
 
@@ -39,10 +39,10 @@ pub enum PersonaSystemError {
     Nota(#[from] nota_codec::Error),
 }
 
-impl From<serde_json::Error> for PersonaSystemError {
+impl From<serde_json::Error> for Error {
     fn from(source: serde_json::Error) -> Self {
         Self::NiriJson { source }
     }
 }
 
-pub type Result<T> = std::result::Result<T, PersonaSystemError>;
+pub type Result<T> = std::result::Result<T, Error>;

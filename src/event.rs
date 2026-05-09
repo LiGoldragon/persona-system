@@ -53,7 +53,7 @@ impl InputBufferState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PersonaSystemEvent {
+pub enum SystemEvent {
     FocusChanged {
         observation: FocusObservation,
     },
