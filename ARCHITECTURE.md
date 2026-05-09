@@ -37,9 +37,13 @@ flowchart LR
 ## 2 · State and Ownership
 
 The component owns observations and subscriptions. Backend adapters may keep
-backend-specific handles, sockets, or registration state. Durable observation
-history is not owned here; consumers that need history persist it through their
-own `persona-sema`-backed state.
+backend-specific handles, sockets, or registration state.
+
+Durable consumer history is not owned here; consumers that need history persist
+it through their own Sema database. If `persona-system` later needs durable
+subscription registrations, backend cursors, or adapter state, it owns a
+system-scoped Sema database for that state rather than writing into another
+component's database.
 
 ## 3 · Boundaries
 
@@ -56,6 +60,7 @@ This repo does not own:
 - terminal PTY transport (`persona-wezterm`);
 - system frame definitions (`signal-persona-system`);
 - durable transaction ordering for consumers.
+- any other component's Sema database.
 
 ## 4 · Invariants
 
@@ -65,6 +70,8 @@ This repo does not own:
   evidence, not identity.
 - The router receives observations and decides policy.
 - Unknown system state is explicit typed state, not a reason to poll.
+- System-owned durability, when present, is limited to subscription/backend
+  state and emits observations only after commit.
 
 ## Code Map
 
