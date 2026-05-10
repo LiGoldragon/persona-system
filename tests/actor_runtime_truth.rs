@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use persona_system::{
-    FocusObservation, FocusTracker, NiriEvent, NiriFocusActor, NiriFocusActorHandle, NiriWindowId,
+    ApplyNiriEvent, FocusObservation, FocusTracker, NiriEvent, NiriFocus, NiriWindowId,
     SystemTarget,
 };
 
@@ -67,7 +67,7 @@ impl SourceTree {
 }
 
 #[test]
-fn niri_focus_actor_cannot_use_non_kameo_runtime() {
+fn niri_focus_cannot_use_non_kameo_runtime() {
     let forbidden_fragments = [
         "ractor =",
         "name = \"ractor\"",
@@ -104,53 +104,58 @@ fn niri_subscription_cannot_bypass_focus_actor_mailbox() {
             .join("niri.rs"),
     );
 
-    assert!(source.contains("NiriFocusActorHandle::start"));
-    assert!(source.contains("focus_actor.apply(event)"));
+    assert!(source.contains("NiriFocus::start"));
+    assert!(source.contains("focus.ask(ApplyNiriEvent { event }).send()"));
     assert!(!source.contains("tracker.apply_event(&event)"));
 }
 
 #[test]
-fn niri_focus_actor_cannot_be_empty_marker() {
+fn niri_focus_cannot_be_empty_marker() {
     let source = SourceFile::read(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("src")
-            .join("niri_focus_actor.rs"),
+            .join("niri_focus.rs"),
     );
 
-    assert!(source.contains("pub struct NiriFocusActor {"));
+    assert!(source.contains("pub struct NiriFocus {"));
     assert!(source.contains("tracker: FocusTracker,"));
     assert!(source.contains("applied_event_count: u64,"));
     assert!(source.contains("emitted_observation_count: u64,"));
 }
 
 #[tokio::test]
-async fn niri_focus_actor_cannot_emit_target_chatter_without_focus_change() {
+async fn niri_focus_cannot_emit_target_chatter_without_focus_change() {
     let target = SystemTarget::niri_window(10);
     let mut tracker = FocusTracker::new(target, NiriWindowId::new(10));
     tracker.accept(FocusObservation::new(target, false, 1_000_000_005));
-    let actor = NiriFocusActorHandle::start(NiriFocusActor::from_tracker(tracker)).await;
+    let focus = NiriFocus::start(NiriFocus::from_tracker(tracker)).await;
 
-    let observations = actor
-        .apply(window_event(false, 1, 5, "Responder spinner"))
+    let observations = focus
+        .ask(ApplyNiriEvent {
+            event: window_event(false, 1, 5, "Responder spinner"),
+        })
         .await
         .expect("actor applies niri event");
 
     assert!(observations.is_empty());
-    actor.stop().await.expect("actor stops");
+    NiriFocus::stop(focus).await.expect("actor stops");
 }
 
 #[tokio::test]
-async fn niri_focus_actor_cannot_forget_previous_window_observation_between_messages() {
+async fn niri_focus_cannot_forget_previous_window_observation_between_messages() {
     let target = SystemTarget::niri_window(10);
-    let actor =
-        NiriFocusActorHandle::start(NiriFocusActor::new(target, NiriWindowId::new(10))).await;
+    let focus = NiriFocus::start(NiriFocus::new(target, NiriWindowId::new(10))).await;
 
-    let first = actor
-        .apply(window_event(false, 1, 5, "Responder"))
+    let first = focus
+        .ask(ApplyNiriEvent {
+            event: window_event(false, 1, 5, "Responder"),
+        })
         .await
         .expect("actor applies first event");
-    let repeated = actor
-        .apply(window_event(false, 1, 5, "Responder renamed"))
+    let repeated = focus
+        .ask(ApplyNiriEvent {
+            event: window_event(false, 1, 5, "Responder renamed"),
+        })
         .await
         .expect("actor applies repeated event");
 
@@ -159,7 +164,7 @@ async fn niri_focus_actor_cannot_forget_previous_window_observation_between_mess
         vec![FocusObservation::new(target, false, 1_000_000_005)]
     );
     assert!(repeated.is_empty());
-    actor.stop().await.expect("actor stops");
+    NiriFocus::stop(focus).await.expect("actor stops");
 }
 
 fn window_event(focused: bool, seconds: u64, nanos: u32, title: &str) -> NiriEvent {

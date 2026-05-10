@@ -15,9 +15,9 @@ policy and it does not move terminal bytes.
 
 ```mermaid
 flowchart LR
-    "Niri backend" -->|"focus events"| "NiriFocusActor"
+    "Niri backend" -->|"focus events"| "NiriFocus"
     "input recognizer" -->|"buffer events"| "SystemAdapter"
-    "NiriFocusActor" -->|"observation frame"| "signal-persona-system"
+    "NiriFocus" -->|"observation frame"| "signal-persona-system"
     "SystemAdapter" -->|"observation frame"| "signal-persona-system"
     "signal-persona-system" -->|"pushed observation"| "persona-router"
 ```
@@ -31,7 +31,7 @@ flowchart LR
 - a `system` CLI for one-shot focus probes and focus subscriptions;
 - a Niri focus source backed by `niri msg --json windows` and
   `niri msg --json event-stream`;
-- a Kameo `NiriFocusActor` that owns subscription focus state while the event
+- a Kameo `NiriFocus` that owns subscription focus state while the event
   stream is running;
 - prompt/input-buffer observations;
 - event subscription surfaces for consumers;
@@ -41,7 +41,7 @@ flowchart LR
 
 The component owns observations and subscriptions. Backend adapters may keep
 backend-specific handles, sockets, or registration state. A live Niri
-subscription keeps `FocusTracker` state inside `NiriFocusActor`; compositor
+subscription keeps `FocusTracker` state inside `NiriFocus`; compositor
 events enter through that mailbox before any Persona observation is emitted.
 
 Durable consumer history is not owned here; consumers that need history persist
@@ -84,9 +84,9 @@ This repo does not own:
 ```text
 src/target.rs  portable target identity
 src/event.rs   focus/input observation records
-src/niri.rs             Niri focus snapshot and event-stream adapter
-src/niri_focus_actor.rs Kameo owner for live focus subscription state
-src/command.rs          NOTA CLI command surface
+src/niri.rs       Niri focus snapshot and event-stream adapter
+src/niri_focus.rs Kameo owner for live focus subscription state
+src/command.rs    NOTA CLI command surface
 tests/                  smoke and actor-runtime constraint tests
 ```
 

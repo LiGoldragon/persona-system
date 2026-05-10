@@ -6,13 +6,13 @@ use crate::error::{Error, Result};
 use crate::{FocusObservation, FocusTracker, NiriEvent, NiriWindowId, SystemTarget};
 
 #[derive(Debug)]
-pub struct NiriFocusActor {
+pub struct NiriFocus {
     tracker: FocusTracker,
     applied_event_count: u64,
     emitted_observation_count: u64,
 }
 
-impl NiriFocusActor {
+impl NiriFocus {
     pub fn new(target: SystemTarget, id: NiriWindowId) -> Self {
         Self::from_tracker(FocusTracker::new(target, id))
     }
@@ -24,6 +24,23 @@ impl NiriFocusActor {
             emitted_observation_count: 0,
         }
     }
+
+    pub async fn start(focus: Self) -> ActorRef<Self> {
+        let reference = Self::spawn(focus);
+        reference.wait_for_startup().await;
+        reference
+    }
+
+    pub async fn stop(reference: ActorRef<Self>) -> Result<()> {
+        reference
+            .stop_gracefully()
+            .await
+            .map_err(|error| Error::ActorCall {
+                detail: error.to_string(),
+            })?;
+        reference.wait_for_shutdown().await;
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,52 +48,19 @@ pub struct ApplyNiriEvent {
     pub event: NiriEvent,
 }
 
-#[derive(Debug, Clone)]
-pub struct NiriFocusActorHandle {
-    actor_reference: ActorRef<NiriFocusActor>,
-}
-
-impl NiriFocusActorHandle {
-    pub async fn start(actor: NiriFocusActor) -> Self {
-        let actor_reference = NiriFocusActor::spawn(actor);
-        actor_reference.wait_for_startup().await;
-        Self { actor_reference }
-    }
-
-    pub async fn apply(&self, event: NiriEvent) -> Result<Vec<FocusObservation>> {
-        self.actor_reference
-            .ask(ApplyNiriEvent { event })
-            .await
-            .map_err(|error| Error::ActorCall {
-                detail: error.to_string(),
-            })
-    }
-
-    pub async fn stop(self) -> Result<()> {
-        self.actor_reference
-            .stop_gracefully()
-            .await
-            .map_err(|error| Error::ActorCall {
-                detail: error.to_string(),
-            })?;
-        self.actor_reference.wait_for_shutdown().await;
-        Ok(())
-    }
-}
-
-impl Actor for NiriFocusActor {
+impl Actor for NiriFocus {
     type Args = Self;
     type Error = Infallible;
 
     async fn on_start(
-        actor: Self::Args,
+        focus: Self::Args,
         _actor_reference: ActorRef<Self>,
     ) -> std::result::Result<Self, Self::Error> {
-        Ok(actor)
+        Ok(focus)
     }
 }
 
-impl Message<ApplyNiriEvent> for NiriFocusActor {
+impl Message<ApplyNiriEvent> for NiriFocus {
     type Reply = Vec<FocusObservation>;
 
     async fn handle(
