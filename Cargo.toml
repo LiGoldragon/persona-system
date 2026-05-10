@@ -2,7 +2,7 @@
 name         = "persona-system"
 version      = "0.1.0"
 edition      = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license      = "MIT OR Apache-2.0"
 repository   = "https://github.com/LiGoldragon/persona-system"
 description  = "Portable OS and window-manager boundary for Persona."
@@ -17,10 +17,12 @@ name = "system"
 path = "src/main.rs"
 
 [dependencies]
+kameo      = { version = "0.20", default-features = false, features = ["macros", "tracing"] }
 nota-codec = { git = "https://github.com/LiGoldragon/nota-codec.git", branch = "main" }
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror  = "2"
+tokio      = { version = "1", features = ["rt-multi-thread", "macros"] }
 
 [lints.rust]
 unsafe_code = "forbid"

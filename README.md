@@ -20,4 +20,5 @@ system '(SubscribeFocus (NiriWindow 198))'
 
 `ObserveFocus` reads `niri msg --json windows` once. `SubscribeFocus` emits an
 initial `FocusObservation` and then follows `niri msg --json event-stream`,
-filtering noisy compositor events down to changes for the tracked window id.
+filtering noisy compositor events through a Kameo `NiriFocusActor` that owns
+the tracked window state.

@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
+use crate::niri_focus_actor::{NiriFocusActor, NiriFocusActorHandle};
 use crate::{FocusObservation, NiriWindowId, SystemTarget};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +47,10 @@ impl NiriFocusSource {
         let initial = tracker.accept_window(initial_window);
         writeln!(output, "{}", initial.to_nota())?;
         output.flush()?;
+        let runtime = tokio::runtime::Runtime::new()?;
+        let focus_actor = runtime.block_on(NiriFocusActorHandle::start(
+            NiriFocusActor::from_tracker(tracker),
+        ));
 
         let mut process = Command::new(&self.command)
             .args(["msg", "--json", "event-stream"])
@@ -60,11 +65,12 @@ impl NiriFocusSource {
         for line in std::io::BufReader::new(stdout).lines() {
             let line = line?;
             let event = NiriEvent::from_json_str(&line)?;
-            for observation in tracker.apply_event(&event) {
+            for observation in runtime.block_on(focus_actor.apply(event))? {
                 writeln!(output, "{}", observation.to_nota())?;
                 output.flush()?;
             }
         }
+        runtime.block_on(focus_actor.stop())?;
         Ok(())
     }
 

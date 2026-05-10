@@ -17,6 +17,9 @@ pub enum Error {
     #[error("target not found: {target:?}")]
     TargetNotFound { target: crate::SystemTarget },
 
+    #[error("actor call failed: {detail}")]
+    ActorCall { detail: String },
+
     #[error("missing command-line input")]
     MissingInput,
 
