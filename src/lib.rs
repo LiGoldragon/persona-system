@@ -9,5 +9,5 @@ pub use command::{CommandLine, Input, ObserveFocus, SubscribeFocus};
 pub use error::Error;
 pub use event::{FocusObservation, FocusState, InputBufferState, SystemEvent};
 pub use niri::{FocusTracker, NiriEvent, NiriFocusSource, NiriWindowSnapshot, NiriWindows};
-pub use niri_focus::{ApplyNiriEvent, NiriFocus};
+pub use niri_focus::{ApplyNiriEvent, FocusStatistics, FocusStatisticsProbe, ReadFocusStatistics};
 pub use target::{HarnessTarget, NiriWindow, NiriWindowId, SystemTarget};

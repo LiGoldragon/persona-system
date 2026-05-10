@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
-use crate::niri_focus::{ApplyNiriEvent, NiriFocus};
+use crate::niri_focus::ApplyNiriEvent;
 use crate::{FocusObservation, NiriWindowId, SystemTarget};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,7 +48,7 @@ impl NiriFocusSource {
         writeln!(output, "{}", initial.to_nota())?;
         output.flush()?;
         let runtime = tokio::runtime::Runtime::new()?;
-        let focus = runtime.block_on(NiriFocus::start(NiriFocus::from_tracker(tracker)));
+        let focus = runtime.block_on(FocusTracker::start(tracker));
 
         let mut process = Command::new(&self.command)
             .args(["msg", "--json", "event-stream"])
@@ -73,7 +73,7 @@ impl NiriFocusSource {
                 output.flush()?;
             }
         }
-        runtime.block_on(NiriFocus::stop(focus))?;
+        runtime.block_on(FocusTracker::stop(focus))?;
         Ok(())
     }
 
@@ -294,6 +294,8 @@ pub struct FocusTracker {
     generations: HashMap<u64, u64>,
     workspace_id: Option<u64>,
     synthetic_generation: u64,
+    applied_event_count: u64,
+    emitted_observation_count: u64,
 }
 
 impl FocusTracker {
@@ -305,6 +307,8 @@ impl FocusTracker {
             generations: HashMap::new(),
             workspace_id: None,
             synthetic_generation: 0,
+            applied_event_count: 0,
+            emitted_observation_count: 0,
         }
     }
 
@@ -370,6 +374,23 @@ impl FocusTracker {
             _ => {}
         }
         observations
+    }
+
+    pub(crate) fn apply_event_from_mailbox(&mut self, event: &NiriEvent) -> Vec<FocusObservation> {
+        self.applied_event_count = self.applied_event_count.saturating_add(1);
+        let observations = self.apply_event(event);
+        self.emitted_observation_count = self
+            .emitted_observation_count
+            .saturating_add(observations.len() as u64);
+        observations
+    }
+
+    pub(crate) fn applied_event_count(&self) -> u64 {
+        self.applied_event_count
+    }
+
+    pub(crate) fn emitted_observation_count(&self) -> u64 {
+        self.emitted_observation_count
     }
 
     fn next_generation(&mut self) -> u64 {

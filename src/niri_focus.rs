@@ -3,30 +3,11 @@ use kameo::error::Infallible;
 use kameo::message::{Context, Message};
 
 use crate::error::{Error, Result};
-use crate::{FocusObservation, FocusTracker, NiriEvent, NiriWindowId, SystemTarget};
+use crate::{FocusObservation, FocusTracker, NiriEvent};
 
-#[derive(Debug)]
-pub struct NiriFocus {
-    tracker: FocusTracker,
-    applied_event_count: u64,
-    emitted_observation_count: u64,
-}
-
-impl NiriFocus {
-    pub fn new(target: SystemTarget, id: NiriWindowId) -> Self {
-        Self::from_tracker(FocusTracker::new(target, id))
-    }
-
-    pub fn from_tracker(tracker: FocusTracker) -> Self {
-        Self {
-            tracker,
-            applied_event_count: 0,
-            emitted_observation_count: 0,
-        }
-    }
-
-    pub async fn start(focus: Self) -> ActorRef<Self> {
-        let reference = Self::spawn(focus);
+impl FocusTracker {
+    pub async fn start(tracker: Self) -> ActorRef<Self> {
+        let reference = Self::spawn(tracker);
         reference.wait_for_startup().await;
         reference
     }
@@ -48,19 +29,74 @@ pub struct ApplyNiriEvent {
     pub event: NiriEvent,
 }
 
-impl Actor for NiriFocus {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FocusStatisticsProbe {
+    minimum_applied_event_count: u64,
+    minimum_emitted_observation_count: u64,
+}
+
+impl FocusStatisticsProbe {
+    pub fn expecting_at_least(
+        minimum_applied_event_count: u64,
+        minimum_emitted_observation_count: u64,
+    ) -> Self {
+        Self {
+            minimum_applied_event_count,
+            minimum_emitted_observation_count,
+        }
+    }
+
+    fn inspect(self, applied_event_count: u64, emitted_observation_count: u64) -> FocusStatistics {
+        FocusStatistics {
+            applied_event_count,
+            emitted_observation_count,
+            minimum_applied_event_count: self.minimum_applied_event_count,
+            minimum_emitted_observation_count: self.minimum_emitted_observation_count,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReadFocusStatistics {
+    pub probe: FocusStatisticsProbe,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, kameo::Reply)]
+pub struct FocusStatistics {
+    applied_event_count: u64,
+    emitted_observation_count: u64,
+    minimum_applied_event_count: u64,
+    minimum_emitted_observation_count: u64,
+}
+
+impl FocusStatistics {
+    pub fn applied_event_count(&self) -> u64 {
+        self.applied_event_count
+    }
+
+    pub fn emitted_observation_count(&self) -> u64 {
+        self.emitted_observation_count
+    }
+
+    pub fn satisfied(&self) -> bool {
+        self.applied_event_count >= self.minimum_applied_event_count
+            && self.emitted_observation_count >= self.minimum_emitted_observation_count
+    }
+}
+
+impl Actor for FocusTracker {
     type Args = Self;
     type Error = Infallible;
 
     async fn on_start(
-        focus: Self::Args,
+        tracker: Self::Args,
         _actor_reference: ActorRef<Self>,
     ) -> std::result::Result<Self, Self::Error> {
-        Ok(focus)
+        Ok(tracker)
     }
 }
 
-impl Message<ApplyNiriEvent> for NiriFocus {
+impl Message<ApplyNiriEvent> for FocusTracker {
     type Reply = Vec<FocusObservation>;
 
     async fn handle(
@@ -68,11 +104,20 @@ impl Message<ApplyNiriEvent> for NiriFocus {
         message: ApplyNiriEvent,
         _context: &mut Context<Self, Self::Reply>,
     ) -> Self::Reply {
-        self.applied_event_count = self.applied_event_count.saturating_add(1);
-        let observations = self.tracker.apply_event(&message.event);
-        self.emitted_observation_count = self
-            .emitted_observation_count
-            .saturating_add(observations.len() as u64);
-        observations
+        self.apply_event_from_mailbox(&message.event)
+    }
+}
+
+impl Message<ReadFocusStatistics> for FocusTracker {
+    type Reply = FocusStatistics;
+
+    async fn handle(
+        &mut self,
+        message: ReadFocusStatistics,
+        _context: &mut Context<Self, Self::Reply>,
+    ) -> Self::Reply {
+        message
+            .probe
+            .inspect(self.applied_event_count(), self.emitted_observation_count())
     }
 }

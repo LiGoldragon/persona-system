@@ -12,7 +12,7 @@ Rules for work here:
 - Use `niri msg --json windows` for current-state focus probes and
   `niri msg --json event-stream` for pushed focus changes. Filter by tracked
   `NiriWindow` id before emitting Persona observations.
-- Keep live subscription state in the Kameo `NiriFocus`. Do not bypass
+- Keep live subscription state in the Kameo `FocusTracker`. Do not bypass
   the actor mailbox when turning event-stream rows into observations.
 - Escalate if a backend cannot push the needed event; do not add polling as a
   fallback.
