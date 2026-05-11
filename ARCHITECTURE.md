@@ -6,6 +6,13 @@
 forcing router or harness code to know about Niri, Wayland, macOS, or any other
 backend.
 
+> **Scope.** Any "sema" reference here means today's `sema` library
+> (rename pending → `sema-db`). The eventual `Sema` is broader;
+> today's persona-system is a realization step on the
+> eventually-self-hosting stack (eventually the OS itself is in Sema,
+> at which point this OS-boundary layer goes away). See
+> `~/primary/ESSENCE.md` §"Today and eventually".
+
 ---
 
 ## 0 · TL;DR
