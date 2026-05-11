@@ -15,10 +15,10 @@ The `system` CLI accepts one NOTA command:
 
 ```sh
 system '(ObserveFocus (NiriWindow 198))'
-system '(SubscribeFocus (NiriWindow 198))'
+system '(FocusSubscription (NiriWindow 198))'
 ```
 
-`ObserveFocus` reads `niri msg --json windows` once. `SubscribeFocus` emits an
-initial `FocusObservation` and then follows `niri msg --json event-stream`,
+`ObserveFocus` reads `niri msg --json windows` once. `FocusSubscription` emits
+an initial `FocusObservation` and then follows `niri msg --json event-stream`,
 filtering noisy compositor events through the Kameo `FocusTracker` actor that
 owns the tracked window state.

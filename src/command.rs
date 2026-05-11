@@ -13,14 +13,14 @@ pub struct ObserveFocus {
 }
 
 #[derive(NotaRecord, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SubscribeFocus {
+pub struct FocusSubscription {
     pub target: SystemTarget,
 }
 
 #[derive(NotaSum, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Input {
     ObserveFocus(ObserveFocus),
-    SubscribeFocus(SubscribeFocus),
+    FocusSubscription(FocusSubscription),
 }
 
 impl Input {
@@ -36,7 +36,7 @@ impl Input {
                 writeln!(output, "{}", observation.to_nota())?;
                 Ok(())
             }
-            Self::SubscribeFocus(command) => source.subscribe(command.target, output),
+            Self::FocusSubscription(command) => source.subscribe(command.target, output),
         }
     }
 }

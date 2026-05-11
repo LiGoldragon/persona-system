@@ -1,6 +1,6 @@
 use persona_system::{
-    FocusObservation, FocusTracker, HarnessTarget, InputBufferState, NiriEvent, NiriWindowId,
-    NiriWindows, SystemTarget,
+    FocusObservation, FocusTracker, HarnessTarget, Input, InputBufferState, NiriEvent,
+    NiriWindowId, NiriWindows, SystemTarget,
 };
 
 #[test]
@@ -16,6 +16,17 @@ fn focus_observation_protects_owned_window() {
 fn empty_input_buffer_accepts_injection() {
     assert!(InputBufferState::Empty.accepts_injection());
     assert!(!InputBufferState::Unknown.accepts_injection());
+}
+
+#[test]
+fn system_input_uses_noun_form_focus_subscription() {
+    let input = Input::from_nota("(FocusSubscription (NiriWindow 198))")
+        .expect("noun-form focus subscription decodes");
+
+    let Input::FocusSubscription(subscription) = input else {
+        panic!("decoded input should be FocusSubscription");
+    };
+    assert_eq!(subscription.target, SystemTarget::niri_window(198));
 }
 
 #[test]

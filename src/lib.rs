@@ -5,7 +5,7 @@ pub mod niri;
 pub mod niri_focus;
 pub mod target;
 
-pub use command::{CommandLine, Input, ObserveFocus, SubscribeFocus};
+pub use command::{CommandLine, FocusSubscription, Input, ObserveFocus};
 pub use error::Error;
 pub use event::{FocusObservation, FocusState, InputBufferState, SystemEvent};
 pub use niri::{FocusTracker, NiriEvent, NiriFocusSource, NiriWindowSnapshot, NiriWindows};
