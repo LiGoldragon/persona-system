@@ -17,8 +17,9 @@ backend.
 
 ## 0 · TL;DR
 
-This repo owns system observations as pushed events. It does not decide routing
-policy and it does not move terminal bytes.
+This repo owns system observations as pushed events and privileged OS actions
+as a separately-gated surface. It does not decide routing policy and it does
+not move terminal bytes.
 
 ```mermaid
 flowchart LR
@@ -41,6 +42,7 @@ flowchart LR
 - a Kameo `FocusTracker` that owns subscription focus state while the event
   stream is running;
 - prompt/input-buffer observations;
+- privileged action records such as force-focus and focus-drift suppression;
 - event subscription surfaces for consumers;
 - backend adapter traits or data-bearing adapter objects.
 
@@ -50,6 +52,13 @@ The component owns observations and subscriptions. Backend adapters may keep
 backend-specific handles, sockets, or registration state. A live Niri
 subscription keeps `FocusTracker` as the data-bearing actor; compositor events
 enter through that mailbox before any Persona observation is emitted.
+
+Read-only observations and privileged actions are separate surfaces. Focus
+state and prompt-buffer state are observations that consumers subscribe to.
+Force-focus and focus-drift suppression are privileged actions; they require
+`ConnectionClass = System(persona)` from the manager-auth context. A
+non-privileged connection may observe permitted state but cannot request an
+OS-level action.
 
 Durable consumer history is not owned here; consumers that need history persist
 it through their own Sema database. If `persona-system` later needs durable
@@ -78,6 +87,8 @@ This repo does not own:
 
 - Producers push events; consumers subscribe.
 - Backend-specific details stay behind data-bearing adapter objects.
+- Privileged actions are not observations; they require the persona daemon's
+  system connection class.
 - Live subscription state belongs to Kameo actors, not loose shared objects.
 - Niri window id is the first real target key; title, app id, and pid are
   evidence, not identity.
