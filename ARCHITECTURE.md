@@ -69,7 +69,7 @@ This repo does not own:
 
 - delivery decisions (`persona-router`);
 - harness lifecycle (`persona-harness`);
-- terminal PTY transport (`persona-wezterm`);
+- terminal PTY transport (`persona-terminal`);
 - system frame definitions (`signal-persona-system`);
 - durable transaction ordering for consumers.
 - any other component's Sema database.
