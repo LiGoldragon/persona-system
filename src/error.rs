@@ -20,11 +20,20 @@ pub enum Error {
     #[error("actor call failed: {detail}")]
     ActorCall { detail: String },
 
+    #[error("signal frame: {0}")]
+    SignalFrame(#[from] signal_core::FrameError),
+
     #[error("missing command-line input")]
     MissingInput,
 
+    #[error("system socket path is missing")]
+    MissingSocket,
+
     #[error("unexpected command-line argument: {got}")]
     UnexpectedArgument { got: String },
+
+    #[error("unexpected signal frame: {got}")]
+    UnexpectedSignalFrame { got: String },
 
     #[error("invalid inline nota argument: {got}")]
     InvalidInlineNotaArgument { got: String },

@@ -2,11 +2,12 @@ use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::process::{Command, Stdio};
 
+use nota_codec::{Encoder, NotaEncode};
 use serde::Deserialize;
 
 use crate::error::{Error, Result};
 use crate::niri_focus::ApplyNiriEvent;
-use crate::{FocusObservation, NiriWindowId, SystemTarget};
+use crate::{FocusObservation, NiriWindowId, SystemEvent, SystemTarget};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NiriFocusSource {
@@ -45,7 +46,7 @@ impl NiriFocusSource {
         let windows = self.current_windows()?;
         let initial_window = windows.window(id).ok_or(Error::TargetNotFound { target })?;
         let initial = tracker.accept_window(initial_window);
-        writeln!(output, "{}", initial.to_nota())?;
+        ObservationLine::new(initial).write(&mut output)?;
         output.flush()?;
         let runtime = tokio::runtime::Runtime::new()?;
         let focus = runtime.block_on(FocusTracker::start(tracker));
@@ -69,7 +70,7 @@ impl NiriFocusSource {
                     detail: error.to_string(),
                 })?;
             for observation in observations {
-                writeln!(output, "{}", observation.to_nota())?;
+                ObservationLine::new(observation).write(&mut output)?;
                 output.flush()?;
             }
         }
@@ -314,7 +315,7 @@ impl FocusTracker {
 
     pub fn accept(&mut self, observation: FocusObservation) {
         self.generations
-            .insert(self.id.value(), observation.generation);
+            .insert(self.id.value(), observation.generation.into_u64());
         self.last = Some(observation);
     }
 
@@ -396,7 +397,11 @@ impl FocusTracker {
     fn next_generation(&mut self) -> u64 {
         self.synthetic_generation = self.synthetic_generation.saturating_add(1);
         self.last
-            .map(|last| last.generation.saturating_add(self.synthetic_generation))
+            .map(|last| {
+                last.generation
+                    .into_u64()
+                    .saturating_add(self.synthetic_generation)
+            })
             .unwrap_or(self.synthetic_generation)
     }
 
@@ -408,28 +413,34 @@ impl FocusTracker {
                         && self
                             .generations
                             .get(&self.id.value())
-                            .is_none_or(|generation| *generation != observation.generation))
+                            .is_none_or(|generation| {
+                                *generation != observation.generation.into_u64()
+                            }))
             }
             None => true,
         }
     }
 }
 
-impl FocusObservation {
-    pub fn to_nota(self) -> String {
-        format!(
-            "(FocusObservation {} {} {})",
-            self.target.to_nota(),
-            if self.focused { "true" } else { "false" },
-            self.generation
-        )
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ObservationLine {
+    observation: FocusObservation,
 }
 
-impl SystemTarget {
-    pub fn to_nota(self) -> String {
-        match self {
-            Self::NiriWindow(window) => format!("(NiriWindow {})", window.id.value()),
-        }
+impl ObservationLine {
+    fn new(observation: FocusObservation) -> Self {
+        Self { observation }
+    }
+
+    fn text(&self) -> Result<String> {
+        let mut encoder = Encoder::new();
+        let event: SystemEvent = self.observation.into();
+        event.encode(&mut encoder)?;
+        Ok(encoder.into_string())
+    }
+
+    fn write(&self, mut output: impl Write) -> Result<()> {
+        writeln!(output, "{}", self.text()?)?;
+        Ok(())
     }
 }

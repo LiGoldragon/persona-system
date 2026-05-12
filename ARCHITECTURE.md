@@ -35,6 +35,7 @@ flowchart LR
 - typed target identity for windows, panes, and harness surfaces;
 - focus-state observations;
 - a `system` CLI for one-shot focus probes and focus subscriptions;
+- a `persona-system-daemon` socket skeleton for the first Persona stack;
 - a Niri focus source backed by `niri msg --json windows` and
   `niri msg --json event-stream`;
 - a Kameo `FocusTracker` that owns subscription focus state while the event
@@ -71,7 +72,8 @@ component's database.
 
 This repo owns:
 
-- portable system target types;
+- system runtime behavior for portable targets defined by
+  `signal-persona-system`;
 - pushed focus event surfaces;
 - backend abstraction for Niri and later OS ports.
 
@@ -85,9 +87,20 @@ This repo does not own:
 - durable transaction ordering for consumers.
 - any other component's Sema database.
 
+`signal-persona-system` owns the contract types, their rkyv wire derives, and
+their NOTA text derives. `persona-system` consumes those records directly; it
+does not define local mirror records for `SystemTarget`, `FocusObservation`,
+or `SystemRequest`.
+
 ## 4 · Invariants
 
 - Producers push events; consumers subscribe.
+- The daemon accepts the `signal-persona-system` frame boundary.
+- The daemon answers `SystemStatusQuery` with typed health and readiness.
+- A recognized but unbuilt daemon request returns
+  `SystemRequestUnimplemented`; it must not hang or print an untyped text
+  error.
+- `persona-system` must not duplicate contract-owned records.
 - Backend-specific details stay behind data-bearing adapter objects.
 - Privileged actions are not observations; they require the persona daemon's
   system connection class.
@@ -103,13 +116,23 @@ This repo does not own:
 ## Code Map
 
 ```text
-src/target.rs  portable target identity
-src/event.rs   focus observation records
-src/niri.rs       Niri focus snapshot and event-stream adapter
-src/niri_focus.rs Kameo mailbox implementation for `FocusTracker`
-src/command.rs    NOTA CLI command surface
-tests/                  smoke and actor-runtime constraint tests
+src/command.rs     NOTA CLI command surface over `SystemRequest`
+src/daemon.rs      socket daemon skeleton over `signal-persona-system::Frame`
+src/event.rs       local focus-state helpers only
+src/niri.rs        Niri focus snapshot and event-stream adapter
+src/niri_focus.rs  Kameo mailbox implementation for `FocusTracker`
+src/target.rs      local harness-to-system-target helper
+tests/             smoke, daemon, and actor-runtime constraint tests
 ```
+
+## Constraint Witnesses
+
+| Constraint | Nix-visible witness |
+|---|---|
+| The daemon answers typed health/readiness. | `checks.<system>.system-daemon-answers-status-readiness` |
+| The daemon returns typed unimplemented for unfinished recognized requests. | `checks.<system>.system-daemon-returns-typed-unimplemented` |
+| Niri subscriptions pass events through the Kameo mailbox. | `tests/actor_runtime_truth.rs` |
+| `persona-system` does not own terminal prompt-gate vocabulary. | `tests/smoke.rs` |
 
 ## See Also
 

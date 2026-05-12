@@ -27,10 +27,13 @@
         system:
         let
           pkgs = import nixpkgs { inherit system; };
-          toolchain = fenix.packages.${system}.fromToolchainFile {
-            file = ./rust-toolchain.toml;
-            sha256 = "sha256-gh/xTkxKHL4eiRXzWv8KP7vfjSk61Iq48x47BEDFgfk=";
-          };
+          toolchain = fenix.packages.${system}.stable.withComponents [
+            "cargo"
+            "rustc"
+            "rustfmt"
+            "clippy"
+            "rust-src"
+          ];
           craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
           src = craneLib.cleanCargoSource ./.;
           commonArgs = {
@@ -38,6 +41,15 @@
             strictDeps = true;
           };
           cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+          cargoTest =
+            testTarget: testName:
+            craneLib.cargoTest (
+              commonArgs
+              // {
+                inherit cargoArtifacts;
+                cargoTestExtraArgs = "--test ${testTarget} ${testName} -- --exact";
+              }
+            );
         in
         {
           inherit
@@ -46,6 +58,7 @@
             craneLib
             commonArgs
             cargoArtifacts
+            cargoTest
             ;
         };
     in
@@ -79,6 +92,10 @@
               inherit (context) cargoArtifacts;
             }
           );
+          system-daemon-answers-status-readiness =
+            context.cargoTest "daemon" "system_daemon_answers_status_readiness";
+          system-daemon-returns-typed-unimplemented =
+            context.cargoTest "daemon" "system_daemon_returns_typed_unimplemented";
         }
       );
 
@@ -88,6 +105,10 @@
           default = {
             type = "app";
             program = "${self.packages.${system}.default}/bin/system";
+          };
+          daemon = {
+            type = "app";
+            program = "${self.packages.${system}.default}/bin/persona-system-daemon";
           };
         }
       );

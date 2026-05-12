@@ -1,13 +1,25 @@
 pub mod command;
+pub mod daemon;
 pub mod error;
 pub mod event;
 pub mod niri;
 pub mod niri_focus;
 pub mod target;
 
-pub use command::{CommandLine, FocusSubscription, Input, ObserveFocus};
+pub use command::CommandLine;
+pub use daemon::{
+    BoundSystemDaemon, SystemCommandLine, SystemConnection, SystemDaemon, SystemFrameCodec,
+    SystemRequestHandler, SystemState, SystemSupervisor,
+};
 pub use error::Error;
-pub use event::{FocusObservation, FocusState, SystemEvent};
+pub use event::FocusState;
 pub use niri::{FocusTracker, NiriEvent, NiriFocusSource, NiriWindowSnapshot, NiriWindows};
 pub use niri_focus::{ApplyNiriEvent, FocusStatistics, FocusStatisticsProbe, ReadFocusStatistics};
-pub use target::{HarnessTarget, NiriWindow, NiriWindowId, SystemTarget};
+pub use signal_persona_system::{
+    FocusObservation, FocusSnapshot, FocusSubscription, FocusUnsubscription, NiriWindowId,
+    ObservationGeneration, ObservationTargetMissing, SubscriptionAccepted, SubscriptionKind,
+    SystemBackend, SystemEvent, SystemHealth, SystemOperationKind, SystemReadiness, SystemRequest,
+    SystemRequestUnimplemented, SystemStatus, SystemStatusQuery, SystemTarget,
+    SystemUnimplementedReason, WindowClosed,
+};
+pub use target::HarnessTarget;

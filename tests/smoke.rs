@@ -1,6 +1,7 @@
+use nota_codec::{Decoder, NotaDecode};
 use persona_system::{
-    FocusObservation, FocusTracker, HarnessTarget, Input, NiriEvent, NiriWindowId, NiriWindows,
-    SystemTarget,
+    FocusObservation, FocusSubscription, FocusTracker, HarnessTarget, NiriEvent, NiriWindowId,
+    NiriWindows, SystemRequest, SystemTarget,
 };
 
 #[test]
@@ -9,18 +10,19 @@ fn focus_observation_protects_owned_window() {
     let harness = HarnessTarget::new("responder", target);
     let observation = FocusObservation::new(target, true, 7);
 
-    assert!(observation.protects(&harness));
+    assert!(observation.focused);
+    assert!(harness.owns_target(observation.target));
 }
 
 #[test]
 fn system_input_uses_noun_form_focus_subscription() {
-    let input = Input::from_nota("(FocusSubscription (NiriWindow 198))")
-        .expect("noun-form focus subscription decodes");
+    let mut decoder = Decoder::new("(FocusSubscription (NiriWindow 198))");
+    let request = SystemRequest::decode(&mut decoder).expect("contract focus subscription decodes");
 
-    let Input::FocusSubscription(subscription) = input else {
+    let SystemRequest::FocusSubscription(FocusSubscription { target }) = request else {
         panic!("decoded input should be FocusSubscription");
     };
-    assert_eq!(subscription.target, SystemTarget::niri_window(198));
+    assert_eq!(target, SystemTarget::niri_window(198));
 }
 
 #[test]
@@ -111,7 +113,7 @@ fn niri_windows_observe_target_focus_state() {
         .expect("target observed");
 
     assert!(observation.focused);
-    assert_eq!(observation.generation, 2_000_000_009);
+    assert_eq!(observation.generation.into_u64(), 2_000_000_009);
 }
 
 #[test]
@@ -171,7 +173,7 @@ fn focus_tracker_emits_when_target_focus_changes() {
 
     assert_eq!(observations.len(), 1);
     assert!(observations[0].focused);
-    assert_eq!(observations[0].generation, 2_000_000_007);
+    assert_eq!(observations[0].generation.into_u64(), 2_000_000_007);
 }
 
 #[test]

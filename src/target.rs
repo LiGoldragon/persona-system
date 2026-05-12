@@ -1,45 +1,4 @@
-use nota_codec::{NotaRecord, NotaSum, NotaTransparent};
-
-#[derive(NotaTransparent, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NiriWindowId(u64);
-
-impl NiriWindowId {
-    pub fn new(value: u64) -> Self {
-        Self(value)
-    }
-
-    pub fn value(self) -> u64 {
-        self.0
-    }
-}
-
-#[derive(NotaRecord, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NiriWindow {
-    pub id: NiriWindowId,
-}
-
-impl NiriWindow {
-    pub fn new(id: NiriWindowId) -> Self {
-        Self { id }
-    }
-}
-
-#[derive(NotaSum, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SystemTarget {
-    NiriWindow(NiriWindow),
-}
-
-impl SystemTarget {
-    pub fn niri_window(id: u64) -> Self {
-        Self::NiriWindow(NiriWindow::new(NiriWindowId::new(id)))
-    }
-
-    pub fn niri_window_id(self) -> Option<NiriWindowId> {
-        match self {
-            Self::NiriWindow(window) => Some(window.id),
-        }
-    }
-}
+use signal_persona_system::SystemTarget;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HarnessTarget {

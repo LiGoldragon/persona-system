@@ -2,44 +2,14 @@ use std::ffi::OsString;
 use std::io::Write;
 use std::path::PathBuf;
 
-use nota_codec::{Decoder, NotaDecode, NotaRecord, NotaSum};
+use nota_codec::{Decoder, Encoder, NotaDecode, NotaEncode};
+use signal_persona_system::{
+    SystemEvent, SystemHealth, SystemReadiness, SystemRequest, SystemRequestUnimplemented,
+    SystemStatus, SystemUnimplementedReason,
+};
 
+use crate::NiriFocusSource;
 use crate::error::{Error, Result};
-use crate::{NiriFocusSource, SystemTarget};
-
-#[derive(NotaRecord, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ObserveFocus {
-    pub target: SystemTarget,
-}
-
-#[derive(NotaRecord, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FocusSubscription {
-    pub target: SystemTarget,
-}
-
-#[derive(NotaSum, Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Input {
-    ObserveFocus(ObserveFocus),
-    FocusSubscription(FocusSubscription),
-}
-
-impl Input {
-    pub fn from_nota(text: &str) -> Result<Self> {
-        let mut decoder = Decoder::new(text);
-        Ok(Self::decode(&mut decoder)?)
-    }
-
-    pub fn run(self, source: &NiriFocusSource, mut output: impl Write) -> Result<()> {
-        match self {
-            Self::ObserveFocus(command) => {
-                let observation = source.observe(command.target)?;
-                writeln!(output, "{}", observation.to_nota())?;
-                Ok(())
-            }
-            Self::FocusSubscription(command) => source.subscribe(command.target, output),
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandLine {
@@ -62,10 +32,10 @@ impl CommandLine {
     }
 
     pub fn run(&self, source: &NiriFocusSource, output: impl Write) -> Result<()> {
-        self.decode_input()?.run(source, output)
+        SystemCommand::new(self.decode_request()?).run(source, output)
     }
 
-    pub fn decode_input(&self) -> Result<Input> {
+    pub fn decode_request(&self) -> Result<SystemRequest> {
         let Some(first) = self.arguments.first() else {
             return Err(Error::MissingInput);
         };
@@ -77,7 +47,7 @@ impl CommandLine {
                     got: format!("{first:?}"),
                 });
             };
-            Input::from_nota(text)
+            SystemRequestText::new(text).decode()
         } else {
             InputFile::from_path(PathBuf::from(first)).decode()
         }
@@ -89,6 +59,65 @@ impl CommandLine {
                 got: argument.to_string_lossy().to_string(),
             });
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemCommand {
+    request: SystemRequest,
+}
+
+impl SystemCommand {
+    pub fn new(request: SystemRequest) -> Self {
+        Self { request }
+    }
+
+    pub fn run(self, source: &NiriFocusSource, mut output: impl Write) -> Result<()> {
+        match self.request {
+            SystemRequest::FocusSnapshot(command) => {
+                NotaLine::new(source.observe(command.target)?.into()).write(&mut output)
+            }
+            SystemRequest::FocusSubscription(command) => source.subscribe(command.target, output),
+            SystemRequest::SystemStatusQuery(query) => NotaLine::new(
+                SystemStatus {
+                    backend: query.backend,
+                    health: SystemHealth::Running,
+                    readiness: SystemReadiness::Ready,
+                }
+                .into(),
+            )
+            .write(&mut output),
+            other => NotaLine::new(
+                SystemRequestUnimplemented {
+                    operation: other.operation_kind(),
+                    reason: SystemUnimplementedReason::NotBuiltYet,
+                }
+                .into(),
+            )
+            .write(&mut output),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NotaLine {
+    event: SystemEvent,
+}
+
+impl NotaLine {
+    pub fn new(event: SystemEvent) -> Self {
+        Self { event }
+    }
+
+    pub fn text(&self) -> Result<String> {
+        let mut encoder = Encoder::new();
+        self.event.encode(&mut encoder)?;
+        Ok(encoder.into_string())
+    }
+
+    pub fn write(&self, mut output: impl Write) -> Result<()> {
+        writeln!(output, "{}", self.text()?)?;
         Ok(())
     }
 }
@@ -112,6 +141,22 @@ impl<'a> CommandLineArgument<'a> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct SystemRequestText<'a> {
+    text: &'a str,
+}
+
+impl<'a> SystemRequestText<'a> {
+    fn new(text: &'a str) -> Self {
+        Self { text }
+    }
+
+    fn decode(&self) -> Result<SystemRequest> {
+        let mut decoder = Decoder::new(self.text);
+        Ok(SystemRequest::decode(&mut decoder)?)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct InputFile {
     path: PathBuf,
 }
@@ -121,11 +166,11 @@ impl InputFile {
         Self { path }
     }
 
-    fn decode(&self) -> Result<Input> {
+    fn decode(&self) -> Result<SystemRequest> {
         let text = std::fs::read_to_string(&self.path).map_err(|source| Error::InputFileRead {
             path: self.path.clone(),
             source,
         })?;
-        Input::from_nota(&text)
+        SystemRequestText::new(&text).decode()
     }
 }
