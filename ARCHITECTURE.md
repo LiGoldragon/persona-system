@@ -1,6 +1,6 @@
 # persona-system — architecture
 
-*Portable OS, window-manager, focus, and input-observation boundary.*
+*Portable OS, window-manager, and focus-observation boundary.*
 
 `persona-system` names what Persona needs from the operating system without
 forcing router or harness code to know about Niri, Wayland, macOS, or any other
@@ -24,9 +24,7 @@ not move terminal bytes.
 ```mermaid
 flowchart LR
     "Niri backend" -->|"focus events"| "FocusTracker"
-    "input recognizer" -->|"buffer events"| "SystemAdapter"
     "FocusTracker" -->|"observation frame"| "signal-persona-system"
-    "SystemAdapter" -->|"observation frame"| "signal-persona-system"
     "signal-persona-system" -->|"pushed observation"| "persona-router"
 ```
 
@@ -41,7 +39,6 @@ flowchart LR
   `niri msg --json event-stream`;
 - a Kameo `FocusTracker` that owns subscription focus state while the event
   stream is running;
-- prompt/input-buffer observations;
 - privileged action records such as force-focus and focus-drift suppression;
 - event subscription surfaces for consumers;
 - backend adapter traits or data-bearing adapter objects.
@@ -54,11 +51,15 @@ subscription keeps `FocusTracker` as the data-bearing actor; compositor events
 enter through that mailbox before any Persona observation is emitted.
 
 Read-only observations and privileged actions are separate surfaces. Focus
-state and prompt-buffer state are observations that consumers subscribe to.
-Force-focus and focus-drift suppression are privileged actions; they require
-`ConnectionClass = System(persona)` from the manager-auth context. A
-non-privileged connection may observe permitted state but cannot request an
-OS-level action.
+state is an observation that consumers subscribe to. Force-focus and
+focus-drift suppression are privileged actions; they require manager-created
+system authority. A non-privileged connection may observe permitted state but
+cannot request an OS-level action.
+
+Prompt cleanliness, typed write leases, and programmatic write injection are not
+system observations in the current stack. They are terminal transport facts
+owned by `persona-terminal` and `terminal-cell` through the
+`signal-persona-terminal` contract.
 
 Durable consumer history is not owned here; consumers that need history persist
 it through their own Sema database. If `persona-system` later needs durable
@@ -71,7 +72,7 @@ component's database.
 This repo owns:
 
 - portable system target types;
-- pushed focus/input event surfaces;
+- pushed focus event surfaces;
 - backend abstraction for Niri and later OS ports.
 
 This repo does not own:
@@ -80,6 +81,7 @@ This repo does not own:
 - harness lifecycle (`persona-harness`);
 - terminal PTY transport (`persona-terminal`);
 - system frame definitions (`signal-persona-system`);
+- terminal prompt and input-gate contracts (`signal-persona-terminal`);
 - durable transaction ordering for consumers.
 - any other component's Sema database.
 
@@ -96,12 +98,13 @@ This repo does not own:
 - Unknown system state is explicit typed state, not a reason to poll.
 - System-owned durability, when present, is limited to subscription/backend
   state and emits observations only after commit.
+- Prompt cleanliness is terminal-owned, not system-owned.
 
 ## Code Map
 
 ```text
 src/target.rs  portable target identity
-src/event.rs   focus/input observation records
+src/event.rs   focus observation records
 src/niri.rs       Niri focus snapshot and event-stream adapter
 src/niri_focus.rs Kameo mailbox implementation for `FocusTracker`
 src/command.rs    NOTA CLI command surface

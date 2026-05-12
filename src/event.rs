@@ -40,25 +40,8 @@ impl FocusState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum InputBufferState {
-    Empty,
-    Occupied { preview: String },
-    Unknown,
-}
-
-impl InputBufferState {
-    pub fn accepts_injection(&self) -> bool {
-        matches!(self, Self::Empty)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SystemEvent {
     FocusChanged {
         observation: FocusObservation,
-    },
-    InputBufferChanged {
-        target: HarnessTarget,
-        state: InputBufferState,
     },
 }

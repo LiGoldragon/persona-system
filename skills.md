@@ -1,7 +1,7 @@
 # persona-system skill
 
 Work here when the change concerns OS/window-manager abstractions, focus
-events, input-buffer observations, target identity, or backend adapters.
+events, target identity, or backend adapters.
 
 Rules for work here:
 
@@ -9,6 +9,8 @@ Rules for work here:
 - Keep backend handles inside data-bearing adapter objects.
 - Keep routing decisions in `persona-router`.
 - Keep terminal PTY byte transport in `persona-terminal`.
+- Keep prompt cleanliness, input gates, and write-injection safety in
+  `persona-terminal` / `terminal-cell`, through `signal-persona-terminal`.
 - Use `niri msg --json windows` for current-state focus probes and
   `niri msg --json event-stream` for pushed focus changes. Filter by tracked
   `NiriWindow` id before emitting Persona observations.

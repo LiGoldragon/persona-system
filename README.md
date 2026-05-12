@@ -6,10 +6,13 @@ This crate defines typed contracts for:
 
 - harness window identity;
 - focused-window state;
-- prompt/input-buffer observations;
-- delivery decisions made from pushed system events.
+- pushed focus observations.
 
 The first implementation target is the current Niri-based Persona OS stack.
+
+Prompt cleanliness and programmatic write safety are terminal responsibilities,
+owned by `persona-terminal` / `terminal-cell` through
+`signal-persona-terminal` input gates.
 
 The `system` CLI accepts one NOTA command:
 

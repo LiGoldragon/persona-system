@@ -1,6 +1,6 @@
 use persona_system::{
-    FocusObservation, FocusTracker, HarnessTarget, Input, InputBufferState, NiriEvent,
-    NiriWindowId, NiriWindows, SystemTarget,
+    FocusObservation, FocusTracker, HarnessTarget, Input, NiriEvent, NiriWindowId, NiriWindows,
+    SystemTarget,
 };
 
 #[test]
@@ -13,12 +13,6 @@ fn focus_observation_protects_owned_window() {
 }
 
 #[test]
-fn empty_input_buffer_accepts_injection() {
-    assert!(InputBufferState::Empty.accepts_injection());
-    assert!(!InputBufferState::Unknown.accepts_injection());
-}
-
-#[test]
 fn system_input_uses_noun_form_focus_subscription() {
     let input = Input::from_nota("(FocusSubscription (NiriWindow 198))")
         .expect("noun-form focus subscription decodes");
@@ -27,6 +21,57 @@ fn system_input_uses_noun_form_focus_subscription() {
         panic!("decoded input should be FocusSubscription");
     };
     assert_eq!(subscription.target, SystemTarget::niri_window(198));
+}
+
+#[test]
+fn system_boundary_cannot_own_terminal_prompt_gate_records() {
+    let scan = DriftScan::new(env!("CARGO_MANIFEST_DIR"));
+
+    scan.assert_absent(&[
+        "InputBuffer",
+        "input-buffer",
+        "prompt/input-buffer",
+        "prompt-buffer",
+        "accepts_injection",
+    ]);
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct DriftScan {
+    root: std::path::PathBuf,
+}
+
+impl DriftScan {
+    fn new(root: impl Into<std::path::PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    fn assert_absent(&self, forbidden_fragments: &[&str]) {
+        let mut violations = Vec::new();
+        for relative_path in ["src/event.rs", "src/lib.rs"] {
+            self.collect_violations(relative_path, forbidden_fragments, &mut violations);
+        }
+        assert!(
+            violations.is_empty(),
+            "terminal prompt-gate vocabulary belongs to persona-terminal:\n{}",
+            violations.join("\n")
+        );
+    }
+
+    fn collect_violations(
+        &self,
+        relative_path: &str,
+        forbidden_fragments: &[&str],
+        violations: &mut Vec<String>,
+    ) {
+        let path = self.root.join(relative_path);
+        let content = std::fs::read_to_string(&path).expect("scan source file");
+        for fragment in forbidden_fragments {
+            if content.contains(fragment) {
+                violations.push(format!("{relative_path} contains {fragment}"));
+            }
+        }
+    }
 }
 
 #[test]
