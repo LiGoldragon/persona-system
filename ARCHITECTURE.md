@@ -44,6 +44,33 @@ flowchart LR
 - event subscription surfaces for consumers;
 - backend adapter traits or data-bearing adapter objects.
 
+## 1.5 · Supervision-relation reception (skeleton mode)
+
+Per
+`~/primary/reports/designer/142-supervision-in-signal-persona-no-message-proxy-daemon.md` §2.2
+and
+`~/primary/reports/designer/143-prototype-readiness-gap-audit.md` §2.4:
+persona-system is **deferred** per /127 §3 — its focus-tracker work pauses
+until a real consumer surfaces. But the daemon must still come up as a
+supervised first-stack component so the prototype's "all six daemons
+ready" witness can pass.
+
+In **skeleton mode**, the daemon:
+
+1. Reads its `signal-persona::SpawnEnvelope` at startup; binds
+   `system.sock` at mode 0600.
+2. Answers `signal-persona::SupervisionRequest` from a `SupervisionPhase`
+   actor — `ComponentReady { component_started_at }` once the socket is
+   bound; `ComponentHealthReport { health: Running }`.
+3. Returns `SystemEvent::SystemRequestUnimplemented` for every domain
+   request (focus subscription, focus snapshot, system status query) —
+   the contract decodes the variant, the daemon answers honestly that
+   the behavior is not built in this wave.
+
+The Niri backend, FocusTracker, and privileged-action surfaces stay as
+existing design but do not run in skeleton mode. They activate when /127
+§3's deferral ends.
+
 ## 2 · State and Ownership
 
 The component owns observations and subscriptions. Backend adapters may keep
