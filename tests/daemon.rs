@@ -1,9 +1,10 @@
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::thread;
 
-use persona_system::{SystemCommandLine, SystemDaemon, SystemFrameCodec};
+use persona_system::{SocketMode, SystemCommandLine, SystemDaemon, SystemFrameCodec};
 use signal_core::{FrameBody, Reply, Request};
 use signal_persona_system::{
     FocusSubscription, Frame as SystemFrame, SystemBackend, SystemEvent, SystemHealth,
@@ -37,6 +38,23 @@ impl Drop for SocketFixture {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.root);
     }
+}
+
+#[test]
+fn system_daemon_applies_spawn_envelope_socket_mode() {
+    let fixture = SocketFixture::new("socket-mode");
+    let server = SystemDaemon::from_socket(fixture.socket())
+        .with_socket_mode(SocketMode::from_octal(0o600))
+        .bind()
+        .expect("daemon binds before client connects");
+
+    let mode = std::fs::metadata(server.socket())
+        .expect("system socket metadata is readable")
+        .permissions()
+        .mode()
+        & 0o777;
+
+    assert_eq!(mode, 0o600);
 }
 
 #[test]

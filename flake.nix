@@ -92,6 +92,8 @@
               inherit (context) cargoArtifacts;
             }
           );
+          system-daemon-applies-spawn-envelope-socket-mode =
+            context.cargoTest "daemon" "system_daemon_applies_spawn_envelope_socket_mode";
           system-daemon-answers-status-readiness =
             context.cargoTest "daemon" "system_daemon_answers_status_readiness";
           system-daemon-returns-typed-unimplemented =

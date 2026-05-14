@@ -8,8 +8,8 @@ pub mod target;
 
 pub use command::CommandLine;
 pub use daemon::{
-    BoundSystemDaemon, SystemCommandLine, SystemConnection, SystemDaemon, SystemFrameCodec,
-    SystemRequestHandler, SystemState, SystemSupervisor,
+    BoundSystemDaemon, SocketMode, SystemCommandLine, SystemConnection, SystemDaemon,
+    SystemFrameCodec, SystemRequestHandler, SystemState, SystemSupervisor,
 };
 pub use error::Error;
 pub use event::FocusState;

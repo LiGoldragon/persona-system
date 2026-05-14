@@ -54,7 +54,8 @@ ready" witness can pass.
 In **skeleton mode**, the daemon:
 
 1. Reads its `signal-persona::SpawnEnvelope` at startup; binds
-   `system.sock` at mode 0600.
+   `system.sock` at mode 0600 by applying the `PERSONA_SOCKET_MODE`
+   value from the Persona spawn envelope.
 2. Answers `signal-persona::SupervisionRequest` from a `SupervisionPhase`
    actor — `ComponentReady { component_started_at }` once the socket is
    bound; `ComponentHealthReport { health: Running }`.
@@ -119,6 +120,8 @@ or `SystemRequest`.
 
 - Producers push events; consumers subscribe.
 - The daemon accepts the `signal-persona-system` frame boundary.
+- The daemon applies the managed spawn-envelope socket mode to `system.sock`
+  before accepting client traffic.
 - The daemon answers `SystemStatusQuery` with typed health and readiness.
 - A recognized but unbuilt daemon request returns
   `SystemRequestUnimplemented`; it must not hang or print an untyped text
@@ -152,6 +155,7 @@ tests/             smoke, daemon, and actor-runtime constraint tests
 
 | Constraint | Nix-visible witness |
 |---|---|
+| The daemon applies the managed spawn-envelope socket mode. | `checks.<system>.system-daemon-applies-spawn-envelope-socket-mode` |
 | The daemon answers typed health/readiness. | `checks.<system>.system-daemon-answers-status-readiness` |
 | The daemon returns typed unimplemented for unfinished recognized requests. | `checks.<system>.system-daemon-returns-typed-unimplemented` |
 | Niri subscriptions pass events through the Kameo mailbox. | `tests/actor_runtime_truth.rs` |
