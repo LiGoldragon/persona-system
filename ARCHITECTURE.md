@@ -46,11 +46,7 @@ flowchart LR
 
 ## 1.5 · Supervision-relation reception (skeleton mode)
 
-Per
-`~/primary/reports/designer/142-supervision-in-signal-persona-no-message-proxy-daemon.md` §2.2
-and
-`~/primary/reports/designer/143-prototype-readiness-gap-audit.md` §2.4:
-persona-system is **deferred** per /127 §3 — its focus-tracker work pauses
+persona-system is **deferred** — its focus-tracker work pauses
 until a real consumer surfaces. But the daemon must still come up as a
 supervised first-stack component so the prototype's "all six daemons
 ready" witness can pass.
@@ -68,8 +64,8 @@ In **skeleton mode**, the daemon:
    the behavior is not built in this wave.
 
 The Niri backend, FocusTracker, and privileged-action surfaces stay as
-existing design but do not run in skeleton mode. They activate when /127
-§3's deferral ends.
+existing design but do not run in skeleton mode. They activate when the
+deferral ends.
 
 ## 2 · State and Ownership
 
