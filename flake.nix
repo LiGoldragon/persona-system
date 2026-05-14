@@ -96,6 +96,8 @@
             context.cargoTest "daemon" "system_daemon_applies_spawn_envelope_socket_mode";
           system-daemon-answers-status-readiness =
             context.cargoTest "daemon" "system_daemon_answers_status_readiness";
+          system-daemon-answers-component-supervision-relation =
+            context.cargoTest "daemon" "system_daemon_answers_component_supervision_relation";
           system-daemon-returns-typed-unimplemented =
             context.cargoTest "daemon" "system_daemon_returns_typed_unimplemented";
         }

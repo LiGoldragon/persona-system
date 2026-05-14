@@ -4,8 +4,16 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::thread;
 
-use persona_system::{SocketMode, SystemCommandLine, SystemDaemon, SystemFrameCodec};
+use persona_system::{
+    SocketMode, SupervisionFrameCodec, SupervisionListener, SupervisionProfile,
+    SupervisionSocketMode, SystemCommandLine, SystemDaemon, SystemFrameCodec,
+};
 use signal_core::{FrameBody, Reply, Request};
+use signal_persona::{
+    ComponentHealth, ComponentHealthQuery, ComponentHello, ComponentKind, ComponentName,
+    ComponentReadinessQuery, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
+    SupervisionRequest,
+};
 use signal_persona_system::{
     FocusSubscription, Frame as SystemFrame, SystemBackend, SystemEvent, SystemHealth,
     SystemOperationKind, SystemReadiness, SystemRequest, SystemRequestUnimplemented, SystemStatus,
@@ -31,6 +39,10 @@ impl SocketFixture {
 
     fn socket(&self) -> &PathBuf {
         &self.socket
+    }
+
+    fn supervision_socket(&self) -> PathBuf {
+        self.root.join("system-supervision.sock")
     }
 }
 
@@ -99,6 +111,68 @@ fn system_daemon_answers_status_readiness() {
 }
 
 #[test]
+fn system_daemon_answers_component_supervision_relation() {
+    let fixture = SocketFixture::new("supervision");
+    let supervision_socket = fixture.supervision_socket();
+    let _supervision = SupervisionListener::new(
+        SupervisionProfile::system(),
+        supervision_socket.clone(),
+        SupervisionSocketMode::from_octal(0o600),
+    )
+    .spawn()
+    .expect("system supervision listener starts");
+
+    let mode = std::fs::metadata(&supervision_socket)
+        .expect("supervision socket metadata is readable")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600);
+
+    let mut stream = UnixStream::connect(&supervision_socket).expect("client connects");
+    let codec = SupervisionFrameCodec::new(1024 * 1024);
+
+    write_supervision_request(
+        &mut stream,
+        SupervisionRequest::ComponentHello(ComponentHello {
+            expected_component: ComponentName::new("persona-system"),
+            expected_kind: ComponentKind::System,
+            supervision_protocol_version: SupervisionProtocolVersion::new(1),
+        }),
+    );
+    let identity = codec.read_reply(&mut stream).expect("identity reply");
+    assert!(matches!(
+        identity,
+        SupervisionReply::ComponentIdentity(identity)
+            if identity.name.as_str() == "persona-system"
+                && identity.kind == ComponentKind::System
+    ));
+
+    write_supervision_request(
+        &mut stream,
+        SupervisionRequest::ComponentReadinessQuery(ComponentReadinessQuery {
+            component: ComponentName::new("persona-system"),
+        }),
+    );
+    assert!(matches!(
+        codec.read_reply(&mut stream).expect("readiness reply"),
+        SupervisionReply::ComponentReady(_)
+    ));
+
+    write_supervision_request(
+        &mut stream,
+        SupervisionRequest::ComponentHealthQuery(ComponentHealthQuery {
+            component: ComponentName::new("persona-system"),
+        }),
+    );
+    assert!(matches!(
+        codec.read_reply(&mut stream).expect("health reply"),
+        SupervisionReply::ComponentHealthReport(report)
+            if report.health == ComponentHealth::Running
+    ));
+}
+
+#[test]
 fn system_daemon_returns_typed_unimplemented() {
     let fixture = SocketFixture::new("unimplemented");
     let server = SystemDaemon::from_socket(fixture.socket())
@@ -130,10 +204,21 @@ fn system_daemon_returns_typed_unimplemented() {
 }
 
 fn write_request(stream: &mut UnixStream, request: SystemRequest) {
-    let frame = SystemFrame::new(FrameBody::Request(Request::assert(request)));
+    let frame = SystemFrame::new(FrameBody::Request(Request::from_payload(request)));
     let bytes = frame.encode_length_prefixed().expect("request encodes");
     stream.write_all(&bytes).expect("request writes");
     stream.flush().expect("request flushes");
+}
+
+fn write_supervision_request(stream: &mut UnixStream, request: SupervisionRequest) {
+    let frame = SupervisionFrame::new(FrameBody::Request(Request::from_payload(request)));
+    let bytes = frame
+        .encode_length_prefixed()
+        .expect("supervision request encodes");
+    stream
+        .write_all(bytes.as_slice())
+        .expect("supervision request writes");
+    stream.flush().expect("supervision request flushes");
 }
 
 fn read_event(stream: &mut UnixStream) -> SystemEvent {

@@ -4,6 +4,7 @@ pub mod error;
 pub mod event;
 pub mod niri;
 pub mod niri_focus;
+pub mod supervision;
 pub mod target;
 
 pub use command::CommandLine;
@@ -21,5 +22,8 @@ pub use signal_persona_system::{
     SystemBackend, SystemEvent, SystemHealth, SystemOperationKind, SystemReadiness, SystemRequest,
     SystemRequestUnimplemented, SystemStatus, SystemStatusQuery, SystemTarget,
     SystemUnimplementedReason, WindowClosed,
+};
+pub use supervision::{
+    SupervisionFrameCodec, SupervisionListener, SupervisionProfile, SupervisionSocketMode,
 };
 pub use target::HarnessTarget;

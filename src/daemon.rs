@@ -15,6 +15,7 @@ use signal_persona_system::{
 };
 
 use crate::error::{Error, Result};
+use crate::supervision::{SupervisionListener, SupervisionProfile};
 
 #[derive(Debug)]
 pub struct SystemDaemon {
@@ -52,6 +53,9 @@ impl SystemDaemon {
 
     pub fn run(self) -> Result<()> {
         let bound = self.bind()?;
+        let _supervision = SupervisionListener::from_environment(SupervisionProfile::system())
+            .map(SupervisionListener::spawn)
+            .transpose()?;
         eprintln!("persona-system-daemon socket={}", bound.socket.display());
         bound.serve_forever()
     }
