@@ -8,7 +8,7 @@ use persona_system::{
     SocketMode, SupervisionFrameCodec, SupervisionListener, SupervisionProfile,
     SupervisionSocketMode, SystemCommandLine, SystemDaemon, SystemFrameCodec,
 };
-use signal_core::{FrameBody, Reply, Request};
+use signal_core::{FrameBody, Reply, Request, SignalVerb};
 use signal_persona::{
     ComponentHealth, ComponentHealthQuery, ComponentHello, ComponentKind, ComponentName,
     ComponentReadinessQuery, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
@@ -76,6 +76,23 @@ fn system_command_line_requires_socket_path() {
         .expect_err("missing socket is typed");
 
     assert_eq!(error.to_string(), "system socket path is missing");
+}
+
+#[test]
+fn system_frame_codec_rejects_mismatched_signal_verb() {
+    let frame = SystemFrame::new(FrameBody::Request(Request::unchecked_operation(
+        SignalVerb::Assert,
+        SystemRequest::SystemStatusQuery(SystemStatusQuery {
+            backend: SystemBackend::Niri,
+        }),
+    )));
+    let bytes = frame.encode_length_prefixed().expect("frame encodes");
+    let mut input = bytes.as_slice();
+    let error = SystemFrameCodec::default()
+        .read_request(&mut input)
+        .expect_err("mismatched verb is rejected");
+
+    assert!(error.to_string().contains("signal verb mismatch"));
 }
 
 #[test]

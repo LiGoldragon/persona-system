@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use kameo::actor::{Actor, ActorRef, Spawn};
 use kameo::error::Infallible;
 use kameo::message::{Context, Message};
-use signal_core::{FrameBody, Reply, Request};
+use signal_core::{FrameBody, Reply};
 use signal_persona_system::{
     Frame as SystemFrame, SystemBackend, SystemEvent, SystemHealth, SystemOperationKind,
     SystemReadiness, SystemRequest, SystemRequestUnimplemented, SystemStatus, SystemStatusQuery,
@@ -205,7 +205,13 @@ impl SystemFrameCodec {
 
     pub fn read_request(&self, reader: &mut impl Read) -> Result<SystemRequest> {
         match self.read_frame(reader)?.into_body() {
-            FrameBody::Request(Request::Operation { payload, .. }) => Ok(payload),
+            FrameBody::Request(request) => {
+                request
+                    .into_payload_checked()
+                    .map_err(|error| Error::UnexpectedSignalFrame {
+                        got: error.to_string(),
+                    })
+            }
             other => Err(Error::UnexpectedSignalFrame {
                 got: format!("{other:?}"),
             }),
