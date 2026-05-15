@@ -8,7 +8,10 @@ use persona_system::{
     SocketMode, SupervisionFrameCodec, SupervisionListener, SupervisionProfile,
     SupervisionSocketMode, SystemCommandLine, SystemDaemon, SystemFrameCodec,
 };
-use signal_core::{FrameBody, Reply, Request, SignalVerb};
+use signal_core::{
+    ExchangeIdentifier, ExchangeLane, ExchangeSequence, FrameBody, NonEmpty, Operation, Reply,
+    Request, RequestRejectionReason, SessionEpoch, SignalVerb, SubReply,
+};
 use signal_persona::{
     ComponentHealth, ComponentHealthQuery, ComponentHello, ComponentKind, ComponentName,
     ComponentReadinessQuery, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
@@ -80,19 +83,27 @@ fn system_command_line_requires_socket_path() {
 
 #[test]
 fn system_frame_codec_rejects_mismatched_signal_verb() {
-    let frame = SystemFrame::new(FrameBody::Request(Request::unchecked_operation(
+    let request = Request::from_operations(NonEmpty::single(Operation::new(
         SignalVerb::Assert,
         SystemRequest::SystemStatusQuery(SystemStatusQuery {
             backend: SystemBackend::Niri,
         }),
     )));
+    let frame = SystemFrame::new(FrameBody::Request {
+        exchange: test_exchange(),
+        request,
+    });
     let bytes = frame.encode_length_prefixed().expect("frame encodes");
     let mut input = bytes.as_slice();
     let error = SystemFrameCodec::default()
         .read_request(&mut input)
         .expect_err("mismatched verb is rejected");
 
-    assert!(error.to_string().contains("signal verb mismatch"));
+    assert!(matches!(
+        error,
+        persona_system::Error::UnexpectedSignalFrame { got }
+            if got == RequestRejectionReason::VerbPayloadMismatch { index: 0 }.to_string()
+    ));
 }
 
 #[test]
@@ -221,14 +232,20 @@ fn system_daemon_returns_typed_unimplemented() {
 }
 
 fn write_request(stream: &mut UnixStream, request: SystemRequest) {
-    let frame = SystemFrame::new(FrameBody::Request(Request::from_payload(request)));
+    let frame = SystemFrame::new(FrameBody::Request {
+        exchange: test_exchange(),
+        request: Request::from_payload(request),
+    });
     let bytes = frame.encode_length_prefixed().expect("request encodes");
     stream.write_all(&bytes).expect("request writes");
     stream.flush().expect("request flushes");
 }
 
 fn write_supervision_request(stream: &mut UnixStream, request: SupervisionRequest) {
-    let frame = SupervisionFrame::new(FrameBody::Request(Request::from_payload(request)));
+    let frame = SupervisionFrame::new(FrameBody::Request {
+        exchange: test_exchange(),
+        request: Request::from_payload(request),
+    });
     let bytes = frame
         .encode_length_prefixed()
         .expect("supervision request encodes");
@@ -243,9 +260,23 @@ fn read_event(stream: &mut UnixStream) -> SystemEvent {
         .read_frame(stream)
         .expect("event frame reads");
     match frame.into_body() {
-        FrameBody::Reply(Reply::Operation(event)) => event,
+        FrameBody::Reply { reply, .. } => match reply {
+            Reply::Accepted { per_operation, .. } => match per_operation.into_head() {
+                SubReply::Ok { payload, .. } => payload,
+                other => panic!("expected ok system sub-reply, got {other:?}"),
+            },
+            Reply::Rejected { reason } => panic!("expected accepted reply, got {reason:?}"),
+        },
         other => panic!("expected system event reply, got {other:?}"),
     }
+}
+
+fn test_exchange() -> ExchangeIdentifier {
+    ExchangeIdentifier::new(
+        SessionEpoch::new(1),
+        ExchangeLane::Connector,
+        ExchangeSequence::new(1),
+    )
 }
 
 fn unique_nanos() -> u128 {

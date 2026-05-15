@@ -7,7 +7,9 @@ use std::path::PathBuf;
 use kameo::actor::{Actor, ActorRef, Spawn};
 use kameo::error::Infallible;
 use kameo::message::{Context, Message};
-use signal_core::{FrameBody, Reply};
+use signal_core::{
+    ExchangeIdentifier, FrameBody, NonEmpty, Reply, SignalVerb, SubReply,
+};
 use signal_persona_system::{
     Frame as SystemFrame, SystemBackend, SystemEvent, SystemHealth, SystemOperationKind,
     SystemReadiness, SystemRequest, SystemRequestUnimplemented, SystemStatus, SystemStatusQuery,
@@ -95,10 +97,10 @@ impl SystemDaemon {
         let request = connection.read_signal_request()?;
         let event = runtime.block_on(async {
             SystemRequestHandler::new(system.clone())
-                .event_for_request(request)
+                .event_for_request(request.request)
                 .await
         })?;
-        connection.write_signal_event(event.clone())?;
+        connection.write_signal_event(request.exchange, request.verb, event.clone())?;
         Ok(event)
     }
 }
@@ -165,13 +167,18 @@ impl SystemConnection {
         }
     }
 
-    pub fn read_signal_request(&mut self) -> Result<SystemRequest> {
+    pub fn read_signal_request(&mut self) -> Result<ReceivedSystemRequest> {
         self.signal.read_request(&mut self.stream)
     }
 
-    pub fn write_signal_event(&mut self, event: SystemEvent) -> Result<()> {
+    pub fn write_signal_event(
+        &mut self,
+        exchange: ExchangeIdentifier,
+        verb: SignalVerb,
+        event: SystemEvent,
+    ) -> Result<()> {
         let stream = self.stream.get_mut();
-        self.signal.write_event(stream, event)
+        self.signal.write_event(stream, exchange, verb, event)
     }
 }
 
@@ -203,14 +210,26 @@ impl SystemFrameCodec {
         Ok(SystemFrame::decode_length_prefixed(&bytes)?)
     }
 
-    pub fn read_request(&self, reader: &mut impl Read) -> Result<SystemRequest> {
+    pub fn read_request(&self, reader: &mut impl Read) -> Result<ReceivedSystemRequest> {
         match self.read_frame(reader)?.into_body() {
-            FrameBody::Request(request) => {
-                request
-                    .into_payload_checked()
-                    .map_err(|error| Error::UnexpectedSignalFrame {
-                        got: error.to_string(),
-                    })
+            FrameBody::Request { exchange, request } => {
+                let checked =
+                    request
+                        .into_checked()
+                        .map_err(|(error, _request)| Error::UnexpectedSignalFrame {
+                            got: error.to_string(),
+                        })?;
+                let (operation, tail) = checked.operations.into_head_and_tail();
+                if !tail.is_empty() {
+                    return Err(Error::UnexpectedSignalFrame {
+                        got: format!("expected one system operation, got {}", tail.len() + 1),
+                    });
+                }
+                Ok(ReceivedSystemRequest {
+                    exchange,
+                    verb: operation.verb,
+                    request: operation.payload,
+                })
             }
             other => Err(Error::UnexpectedSignalFrame {
                 got: format!("{other:?}"),
@@ -218,13 +237,32 @@ impl SystemFrameCodec {
         }
     }
 
-    pub fn write_event(&self, writer: &mut impl Write, event: SystemEvent) -> Result<()> {
-        let frame = SystemFrame::new(FrameBody::Reply(Reply::operation(event)));
+    pub fn write_event(
+        &self,
+        writer: &mut impl Write,
+        exchange: ExchangeIdentifier,
+        verb: SignalVerb,
+        event: SystemEvent,
+    ) -> Result<()> {
+        let frame = SystemFrame::new(FrameBody::Reply {
+            exchange,
+            reply: Reply::completed(NonEmpty::single(SubReply::Ok {
+                verb,
+                payload: event,
+            })),
+        });
         let bytes = frame.encode_length_prefixed()?;
         writer.write_all(&bytes)?;
         writer.flush()?;
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReceivedSystemRequest {
+    exchange: ExchangeIdentifier,
+    verb: SignalVerb,
+    request: SystemRequest,
 }
 
 impl Default for SystemFrameCodec {
