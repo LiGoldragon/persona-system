@@ -59,7 +59,7 @@ In **skeleton mode**, the daemon:
 2. Answers `signal-persona::SupervisionRequest` from a `SupervisionPhase`
    actor — `ComponentReady { component_started_at }` once the socket is
    bound; `ComponentHealthReport { health: Running }`.
-3. Returns `SystemEvent::SystemRequestUnimplemented` for every domain
+3. Returns `SystemReply::SystemRequestUnimplemented` for every domain
    request (focus subscription, focus snapshot, system status query) —
    the contract decodes the variant, the daemon answers honestly that
    the behavior is not built in this wave.
