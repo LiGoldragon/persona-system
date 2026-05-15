@@ -9,18 +9,18 @@ use persona_system::{
     SupervisionSocketMode, SystemCommandLine, SystemDaemon, SystemFrameCodec,
 };
 use signal_core::{
-    ExchangeIdentifier, ExchangeLane, ExchangeSequence, FrameBody, NonEmpty, Operation, Reply,
-    Request, RequestRejectionReason, SessionEpoch, SignalVerb, SubReply,
+    ExchangeIdentifier, ExchangeLane, LaneSequence, NonEmpty, Operation, Reply, Request,
+    RequestRejectionReason, SessionEpoch, SignalVerb, SubReply,
 };
 use signal_persona::{
     ComponentHealth, ComponentHealthQuery, ComponentHello, ComponentKind, ComponentName,
-    ComponentReadinessQuery, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
-    SupervisionRequest,
+    ComponentReadinessQuery, SupervisionFrame, SupervisionFrameBody, SupervisionProtocolVersion,
+    SupervisionReply, SupervisionRequest,
 };
 use signal_persona_system::{
-    FocusSubscription, Frame as SystemFrame, SystemBackend, SystemEvent, SystemHealth,
-    SystemOperationKind, SystemReadiness, SystemRequest, SystemRequestUnimplemented, SystemStatus,
-    SystemStatusQuery, SystemTarget, SystemUnimplementedReason,
+    FocusSubscription, SystemBackend, SystemFrame, SystemFrameBody, SystemHealth,
+    SystemOperationKind, SystemReadiness, SystemReply, SystemRequest, SystemRequestUnimplemented,
+    SystemStatus, SystemStatusQuery, SystemTarget, SystemUnimplementedReason,
 };
 
 struct SocketFixture {
@@ -89,7 +89,7 @@ fn system_frame_codec_rejects_mismatched_signal_verb() {
             backend: SystemBackend::Niri,
         }),
     )));
-    let frame = SystemFrame::new(FrameBody::Request {
+    let frame = SystemFrame::new(SystemFrameBody::Request {
         exchange: test_exchange(),
         request,
     });
@@ -118,24 +118,23 @@ fn system_daemon_answers_status_readiness() {
     let mut stream = UnixStream::connect(socket).expect("client connects");
     write_request(
         &mut stream,
-        SystemStatusQuery {
+        SystemRequest::SystemStatusQuery(SystemStatusQuery {
             backend: SystemBackend::Niri,
-        }
-        .into(),
+        }),
     );
-    let event = read_event(&mut stream);
-    let server_event = handle
+    let reply = read_reply(&mut stream);
+    let server_reply = handle
         .join()
         .expect("daemon thread joins")
         .expect("daemon handles one request");
 
-    let expected = SystemEvent::SystemStatus(SystemStatus {
+    let expected = SystemReply::SystemStatus(SystemStatus {
         backend: SystemBackend::Niri,
         health: SystemHealth::Running,
         readiness: SystemReadiness::Ready,
     });
-    assert_eq!(event, expected);
-    assert_eq!(server_event, expected);
+    assert_eq!(reply, expected);
+    assert_eq!(server_reply, expected);
 }
 
 #[test]
@@ -212,27 +211,26 @@ fn system_daemon_returns_typed_unimplemented() {
     let mut stream = UnixStream::connect(socket).expect("client connects");
     write_request(
         &mut stream,
-        FocusSubscription {
+        SystemRequest::FocusSubscription(FocusSubscription {
             target: SystemTarget::niri_window(223),
-        }
-        .into(),
+        }),
     );
-    let event = read_event(&mut stream);
-    let server_event = handle
+    let reply = read_reply(&mut stream);
+    let server_reply = handle
         .join()
         .expect("daemon thread joins")
         .expect("daemon handles one request");
 
-    let expected = SystemEvent::SystemRequestUnimplemented(SystemRequestUnimplemented {
+    let expected = SystemReply::SystemRequestUnimplemented(SystemRequestUnimplemented {
         operation: SystemOperationKind::FocusSubscription,
         reason: SystemUnimplementedReason::NotBuiltYet,
     });
-    assert_eq!(event, expected);
-    assert_eq!(server_event, expected);
+    assert_eq!(reply, expected);
+    assert_eq!(server_reply, expected);
 }
 
 fn write_request(stream: &mut UnixStream, request: SystemRequest) {
-    let frame = SystemFrame::new(FrameBody::Request {
+    let frame = SystemFrame::new(SystemFrameBody::Request {
         exchange: test_exchange(),
         request: Request::from_payload(request),
     });
@@ -242,7 +240,7 @@ fn write_request(stream: &mut UnixStream, request: SystemRequest) {
 }
 
 fn write_supervision_request(stream: &mut UnixStream, request: SupervisionRequest) {
-    let frame = SupervisionFrame::new(FrameBody::Request {
+    let frame = SupervisionFrame::new(SupervisionFrameBody::Request {
         exchange: test_exchange(),
         request: Request::from_payload(request),
     });
@@ -255,19 +253,19 @@ fn write_supervision_request(stream: &mut UnixStream, request: SupervisionReques
     stream.flush().expect("supervision request flushes");
 }
 
-fn read_event(stream: &mut UnixStream) -> SystemEvent {
+fn read_reply(stream: &mut UnixStream) -> SystemReply {
     let frame = SystemFrameCodec::default()
         .read_frame(stream)
-        .expect("event frame reads");
+        .expect("reply frame reads");
     match frame.into_body() {
-        FrameBody::Reply { reply, .. } => match reply {
+        SystemFrameBody::Reply { reply, .. } => match reply {
             Reply::Accepted { per_operation, .. } => match per_operation.into_head() {
                 SubReply::Ok { payload, .. } => payload,
                 other => panic!("expected ok system sub-reply, got {other:?}"),
             },
             Reply::Rejected { reason } => panic!("expected accepted reply, got {reason:?}"),
         },
-        other => panic!("expected system event reply, got {other:?}"),
+        other => panic!("expected system reply, got {other:?}"),
     }
 }
 
@@ -275,7 +273,7 @@ fn test_exchange() -> ExchangeIdentifier {
     ExchangeIdentifier::new(
         SessionEpoch::new(1),
         ExchangeLane::Connector,
-        ExchangeSequence::new(1),
+        LaneSequence::new(1),
     )
 }
 

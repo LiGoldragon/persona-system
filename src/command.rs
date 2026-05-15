@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use nota_codec::{Decoder, Encoder, NotaDecode, NotaEncode};
 use signal_persona_system::{
-    SystemEvent, SystemHealth, SystemReadiness, SystemRequest, SystemRequestUnimplemented,
+    SystemHealth, SystemReadiness, SystemReply, SystemRequest, SystemRequestUnimplemented,
     SystemStatus, SystemUnimplementedReason,
 };
 
@@ -75,26 +75,25 @@ impl SystemCommand {
 
     pub fn run(self, source: &NiriFocusSource, mut output: impl Write) -> Result<()> {
         match self.request {
-            SystemRequest::FocusSnapshot(command) => {
-                NotaLine::new(source.observe(command.target)?.into()).write(&mut output)
-            }
+            SystemRequest::FocusSnapshot(command) => NotaLine::new(
+                SystemReply::FocusSnapshotReply(source.observe(command.target)?),
+            )
+            .write(&mut output),
             SystemRequest::FocusSubscription(command) => source.subscribe(command.target, output),
-            SystemRequest::SystemStatusQuery(query) => NotaLine::new(
-                SystemStatus {
+            SystemRequest::SystemStatusQuery(query) => {
+                NotaLine::new(SystemReply::SystemStatus(SystemStatus {
                     backend: query.backend,
                     health: SystemHealth::Running,
                     readiness: SystemReadiness::Ready,
-                }
-                .into(),
-            )
-            .write(&mut output),
-            other => NotaLine::new(
+                }))
+                .write(&mut output)
+            }
+            other => NotaLine::new(SystemReply::SystemRequestUnimplemented(
                 SystemRequestUnimplemented {
                     operation: other.operation_kind(),
                     reason: SystemUnimplementedReason::NotBuiltYet,
-                }
-                .into(),
-            )
+                },
+            ))
             .write(&mut output),
         }
     }
@@ -102,17 +101,17 @@ impl SystemCommand {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NotaLine {
-    event: SystemEvent,
+    reply: SystemReply,
 }
 
 impl NotaLine {
-    pub fn new(event: SystemEvent) -> Self {
-        Self { event }
+    pub fn new(reply: SystemReply) -> Self {
+        Self { reply }
     }
 
     pub fn text(&self) -> Result<String> {
         let mut encoder = Encoder::new();
-        self.event.encode(&mut encoder)?;
+        self.reply.encode(&mut encoder)?;
         Ok(encoder.into_string())
     }
 

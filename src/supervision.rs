@@ -7,14 +7,12 @@ use std::thread::JoinHandle;
 use kameo::actor::{Actor, ActorRef, Spawn};
 use kameo::error::Infallible;
 use kameo::message::{Context, Message};
-use signal_core::{
-    ExchangeIdentifier, FrameBody, NonEmpty, Reply, SignalVerb, SubReply,
-};
+use signal_core::{ExchangeIdentifier, NonEmpty, Reply, SignalVerb, SubReply};
 use signal_persona::{
     ComponentHealth, ComponentHealthQuery, ComponentHealthReport, ComponentHello,
     ComponentIdentity, ComponentKind, ComponentName, ComponentReadinessQuery, ComponentReady,
-    GracefulStopAcknowledgement, SupervisionFrame, SupervisionProtocolVersion, SupervisionReply,
-    SupervisionRequest,
+    GracefulStopAcknowledgement, SupervisionFrame, SupervisionFrameBody as FrameBody,
+    SupervisionProtocolVersion, SupervisionReply, SupervisionRequest,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,7 +216,13 @@ impl SupervisionServer {
     ) -> std::io::Result<()> {
         while let Ok(request) = self.codec.read_request(stream) {
             let reply = runtime
-                .block_on(phase.ask(HandleSupervisionRequest { request: request.request }).send())
+                .block_on(
+                    phase
+                        .ask(HandleSupervisionRequest {
+                            request: request.request,
+                        })
+                        .send(),
+                )
                 .map_err(io_error)?;
             self.codec
                 .write_reply(stream, request.exchange, request.verb, reply.reply)?;

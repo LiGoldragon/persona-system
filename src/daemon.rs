@@ -7,13 +7,11 @@ use std::path::PathBuf;
 use kameo::actor::{Actor, ActorRef, Spawn};
 use kameo::error::Infallible;
 use kameo::message::{Context, Message};
-use signal_core::{
-    ExchangeIdentifier, FrameBody, NonEmpty, Reply, SignalVerb, SubReply,
-};
+use signal_core::{ExchangeIdentifier, NonEmpty, Reply, SignalVerb, SubReply};
 use signal_persona_system::{
-    Frame as SystemFrame, SystemBackend, SystemEvent, SystemHealth, SystemOperationKind,
-    SystemReadiness, SystemRequest, SystemRequestUnimplemented, SystemStatus, SystemStatusQuery,
-    SystemUnimplementedReason,
+    SystemBackend, SystemFrame, SystemFrameBody as FrameBody, SystemHealth, SystemOperationKind,
+    SystemReadiness, SystemReply, SystemRequest, SystemRequestUnimplemented, SystemStatus,
+    SystemStatusQuery, SystemUnimplementedReason,
 };
 
 use crate::error::{Error, Result};
@@ -84,7 +82,7 @@ impl SystemDaemon {
         })
     }
 
-    pub fn serve_one(self) -> Result<SystemEvent> {
+    pub fn serve_one(self) -> Result<SystemReply> {
         self.bind()?.serve_one()
     }
 
@@ -92,16 +90,16 @@ impl SystemDaemon {
         runtime: &tokio::runtime::Runtime,
         system: &ActorRef<SystemSupervisor>,
         stream: UnixStream,
-    ) -> Result<SystemEvent> {
+    ) -> Result<SystemReply> {
         let mut connection = SystemConnection::from_stream(stream);
         let request = connection.read_signal_request()?;
-        let event = runtime.block_on(async {
+        let reply = runtime.block_on(async {
             SystemRequestHandler::new(system.clone())
-                .event_for_request(request.request)
+                .reply_for_request(request.request)
                 .await
         })?;
-        connection.write_signal_event(request.exchange, request.verb, event.clone())?;
-        Ok(event)
+        connection.write_signal_reply(request.exchange, request.verb, reply.clone())?;
+        Ok(reply)
     }
 }
 
@@ -137,12 +135,12 @@ impl BoundSystemDaemon {
         &self.socket
     }
 
-    pub fn serve_one(self) -> Result<SystemEvent> {
+    pub fn serve_one(self) -> Result<SystemReply> {
         let (stream, _address) = self.listener.accept()?;
-        let event = SystemDaemon::handle_connection(&self.runtime, &self.system, stream)?;
+        let reply = SystemDaemon::handle_connection(&self.runtime, &self.system, stream)?;
         self.runtime.block_on(SystemSupervisor::stop(self.system))?;
         let _ = std::fs::remove_file(&self.socket);
-        Ok(event)
+        Ok(reply)
     }
 
     pub fn serve_forever(self) -> Result<()> {
@@ -171,14 +169,14 @@ impl SystemConnection {
         self.signal.read_request(&mut self.stream)
     }
 
-    pub fn write_signal_event(
+    pub fn write_signal_reply(
         &mut self,
         exchange: ExchangeIdentifier,
         verb: SignalVerb,
-        event: SystemEvent,
+        reply: SystemReply,
     ) -> Result<()> {
         let stream = self.stream.get_mut();
-        self.signal.write_event(stream, exchange, verb, event)
+        self.signal.write_reply(stream, exchange, verb, reply)
     }
 }
 
@@ -213,12 +211,11 @@ impl SystemFrameCodec {
     pub fn read_request(&self, reader: &mut impl Read) -> Result<ReceivedSystemRequest> {
         match self.read_frame(reader)?.into_body() {
             FrameBody::Request { exchange, request } => {
-                let checked =
-                    request
-                        .into_checked()
-                        .map_err(|(error, _request)| Error::UnexpectedSignalFrame {
-                            got: error.to_string(),
-                        })?;
+                let checked = request.into_checked().map_err(|(error, _request)| {
+                    Error::UnexpectedSignalFrame {
+                        got: error.to_string(),
+                    }
+                })?;
                 let (operation, tail) = checked.operations.into_head_and_tail();
                 if !tail.is_empty() {
                     return Err(Error::UnexpectedSignalFrame {
@@ -237,18 +234,18 @@ impl SystemFrameCodec {
         }
     }
 
-    pub fn write_event(
+    pub fn write_reply(
         &self,
         writer: &mut impl Write,
         exchange: ExchangeIdentifier,
         verb: SignalVerb,
-        event: SystemEvent,
+        system_reply: SystemReply,
     ) -> Result<()> {
         let frame = SystemFrame::new(FrameBody::Reply {
             exchange,
             reply: Reply::completed(NonEmpty::single(SubReply::Ok {
                 verb,
-                payload: event,
+                payload: system_reply,
             })),
         });
         let bytes = frame.encode_length_prefixed()?;
@@ -387,7 +384,7 @@ impl SystemRequestHandler {
         Self { system }
     }
 
-    pub async fn event_for_request(&self, request: SystemRequest) -> Result<SystemEvent> {
+    pub async fn reply_for_request(&self, request: SystemRequest) -> Result<SystemReply> {
         let operation = request.operation_kind();
         let _state = self
             .system
@@ -397,16 +394,17 @@ impl SystemRequestHandler {
                 detail: error.to_string(),
             })?;
         match request {
-            SystemRequest::SystemStatusQuery(query) => self.status_event(query).await,
-            other => Ok(SystemRequestUnimplemented {
-                operation: other.operation_kind(),
-                reason: SystemUnimplementedReason::NotBuiltYet,
-            }
-            .into()),
+            SystemRequest::SystemStatusQuery(query) => self.status_reply(query).await,
+            other => Ok(SystemReply::SystemRequestUnimplemented(
+                SystemRequestUnimplemented {
+                    operation: other.operation_kind(),
+                    reason: SystemUnimplementedReason::NotBuiltYet,
+                },
+            )),
         }
     }
 
-    async fn status_event(&self, query: SystemStatusQuery) -> Result<SystemEvent> {
+    async fn status_reply(&self, query: SystemStatusQuery) -> Result<SystemReply> {
         let state = self
             .system
             .ask(ReadSystemState::expecting_at_least(0))
@@ -414,12 +412,11 @@ impl SystemRequestHandler {
             .map_err(|error| Error::ActorCall {
                 detail: error.to_string(),
             })?;
-        Ok(SystemStatus {
+        Ok(SystemReply::SystemStatus(SystemStatus {
             backend: query.backend,
             health: Self::health(&state),
             readiness: Self::readiness(&state),
-        }
-        .into())
+        }))
     }
 
     fn health(state: &SystemState) -> SystemHealth {

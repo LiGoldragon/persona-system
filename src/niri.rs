@@ -434,7 +434,7 @@ impl ObservationLine {
 
     fn text(&self) -> Result<String> {
         let mut encoder = Encoder::new();
-        let event: SystemEvent = self.observation.into();
+        let event = SystemEvent::FocusObservation(self.observation);
         event.encode(&mut encoder)?;
         Ok(encoder.into_string())
     }
