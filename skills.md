@@ -18,3 +18,40 @@ Rules for work here:
   the actor mailbox when turning event-stream rows into observations.
 - Escalate if a backend cannot push the needed event; do not add polling as a
   fallback.
+
+## Escalation when a backend cannot push
+
+The workspace's `skills/push-not-pull.md` is the canonical rule:
+producers push state, consumers subscribe. A "poll for now" is never the
+right answer — once written, it does not get removed.
+
+When a system-observation backend lacks the subscription primitive the
+component needs (an OS surface that only exposes "what is it now?"
+queries, a compositor without an event stream, an adapter whose only
+read shape is a snapshot), the response is one of these, in order:
+
+1. **Build the primitive in the backend.** If the backend is in scope,
+   add the push surface — an event stream, an inotify watch, a Unix
+   socket subscriber pattern, a `timerfd` deadline when the contract is
+   genuinely "wake me at this deadline." Niri's `event-stream` is the
+   shape this component already relies on; other backends earn the same
+   shape before they integrate.
+2. **Replace the backend.** When the backend cannot be modified, route
+   through a different producer that already pushes.
+3. **Defer the dependent feature.** Real-time observation waits until a
+   push primitive lands. State the deferral explicitly; do not ship a
+   poll loop "until the real one is ready."
+4. **Escalate.** When (1)–(3) do not resolve the case at hand, surface
+   it: a designer report naming the constraint, the backend, the
+   missing push primitive, and the dependent feature. The decision —
+   build, replace, or defer — belongs upstream.
+
+Escalation is the correct outcome when no push answer is found. It is
+not a failure mode; it is the discipline working. The wrong outcome —
+falling back to a poll — is never the answer.
+
+The three carve-outs that look polling-shaped but are not (reachability
+probes, backpressure-aware pacing, deadline-driven OS timers) live in
+`~/primary/ESSENCE.md` §"Polling is forbidden" and
+`~/primary/skills/push-not-pull.md` §"The named carve-outs." Anything
+outside those three escalates.

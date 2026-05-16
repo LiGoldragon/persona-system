@@ -181,6 +181,89 @@ async fn niri_focus_cannot_forget_previous_window_observation_between_messages()
     FocusTracker::stop(focus).await.expect("actor stops");
 }
 
+#[tokio::test]
+async fn niri_focus_cannot_leak_state_between_concurrent_subscribers() {
+    let target = SystemTarget::niri_window(10);
+    let primary = FocusTracker::start(FocusTracker::new(target, NiriWindowId::new(10))).await;
+    let secondary = FocusTracker::start(FocusTracker::new(target, NiriWindowId::new(10))).await;
+
+    let focused_event = window_event(true, 1, 5, "Responder");
+    let primary_first = primary
+        .ask(ApplyNiriEvent {
+            event: focused_event.clone(),
+        })
+        .await
+        .expect("primary actor applies first event");
+    let secondary_first = secondary
+        .ask(ApplyNiriEvent {
+            event: focused_event.clone(),
+        })
+        .await
+        .expect("secondary actor applies first event");
+
+    let expected_first = vec![FocusObservation::new(target, true, 1_000_000_005)];
+    assert_eq!(primary_first, expected_first);
+    assert_eq!(secondary_first, expected_first);
+
+    let duplicate_event = window_event(true, 1, 5, "Responder renamed");
+    let primary_duplicate = primary
+        .ask(ApplyNiriEvent {
+            event: duplicate_event.clone(),
+        })
+        .await
+        .expect("primary actor applies duplicate event");
+    let secondary_duplicate = secondary
+        .ask(ApplyNiriEvent {
+            event: duplicate_event,
+        })
+        .await
+        .expect("secondary actor applies duplicate event");
+
+    assert!(primary_duplicate.is_empty());
+    assert!(secondary_duplicate.is_empty());
+
+    let unfocused_event = window_event(false, 2, 9, "Responder");
+    let primary_change = primary
+        .ask(ApplyNiriEvent {
+            event: unfocused_event.clone(),
+        })
+        .await
+        .expect("primary actor applies focus-change event");
+    let secondary_change = secondary
+        .ask(ApplyNiriEvent {
+            event: unfocused_event,
+        })
+        .await
+        .expect("secondary actor applies focus-change event");
+
+    let expected_change = vec![FocusObservation::new(target, false, 2_000_000_009)];
+    assert_eq!(primary_change, expected_change);
+    assert_eq!(secondary_change, expected_change);
+
+    let primary_statistics = primary
+        .ask(ReadFocusStatistics {
+            probe: FocusStatisticsProbe::expecting_at_least(3, 2),
+        })
+        .await
+        .expect("primary statistics read through typed message");
+    let secondary_statistics = secondary
+        .ask(ReadFocusStatistics {
+            probe: FocusStatisticsProbe::expecting_at_least(3, 2),
+        })
+        .await
+        .expect("secondary statistics read through typed message");
+
+    assert_eq!(primary_statistics.applied_event_count(), 3);
+    assert_eq!(primary_statistics.emitted_observation_count(), 2);
+    assert!(primary_statistics.satisfied());
+    assert_eq!(secondary_statistics.applied_event_count(), 3);
+    assert_eq!(secondary_statistics.emitted_observation_count(), 2);
+    assert!(secondary_statistics.satisfied());
+
+    FocusTracker::stop(primary).await.expect("primary stops");
+    FocusTracker::stop(secondary).await.expect("secondary stops");
+}
+
 #[test]
 fn niri_subscription_cannot_poll_focus_snapshots() {
     let fixture = FakeNiri::new("niri-subscription-cannot-poll-focus-snapshots");
