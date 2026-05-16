@@ -49,6 +49,9 @@ pub enum Error {
 
     #[error("nota error: {0}")]
     Nota(#[from] nota_codec::Error),
+
+    #[error("nota-config: {0}")]
+    NotaConfig(#[from] nota_config::Error),
 }
 
 impl From<serde_json::Error> for Error {

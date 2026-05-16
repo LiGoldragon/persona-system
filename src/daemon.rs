@@ -9,27 +9,50 @@ use kameo::error::Infallible;
 use kameo::message::{Context, Message};
 use signal_core::{ExchangeIdentifier, NonEmpty, Reply, SignalVerb, SubReply};
 use signal_persona_system::{
-    SystemBackend, SystemFrame, SystemFrameBody as FrameBody, SystemHealth, SystemOperationKind,
-    SystemReadiness, SystemReply, SystemRequest, SystemRequestUnimplemented, SystemStatus,
-    SystemStatusQuery, SystemUnimplementedReason,
+    SystemBackend, SystemDaemonConfiguration, SystemFrame, SystemFrameBody as FrameBody,
+    SystemHealth, SystemOperationKind, SystemReadiness, SystemReply, SystemRequest,
+    SystemRequestUnimplemented, SystemStatus, SystemStatusQuery, SystemUnimplementedReason,
 };
 
 use crate::error::{Error, Result};
-use crate::supervision::{SupervisionListener, SupervisionProfile};
+use crate::supervision::{SupervisionListener, SupervisionProfile, SupervisionSocketMode};
 
 #[derive(Debug)]
 pub struct SystemDaemon {
     socket: PathBuf,
     backend: SystemBackend,
     socket_mode: Option<SocketMode>,
+    supervision: Option<SupervisionListener>,
 }
 
 impl SystemDaemon {
+    /// Canonical constructor — every production launch reads typed
+    /// `SystemDaemonConfiguration` from argv via `nota-config` and
+    /// hands the record here.
+    pub fn from_configuration(configuration: SystemDaemonConfiguration) -> Self {
+        let supervision = SupervisionListener::new(
+            SupervisionProfile::system(),
+            PathBuf::from(configuration.supervision_socket_path.as_str()),
+            SupervisionSocketMode::from_octal(
+                configuration.supervision_socket_mode.into_u32(),
+            ),
+        );
+        Self {
+            socket: PathBuf::from(configuration.system_socket_path.as_str()),
+            backend: configuration.backend,
+            socket_mode: Some(SocketMode::from_octal(
+                configuration.system_socket_mode.into_u32(),
+            )),
+            supervision: Some(supervision),
+        }
+    }
+
     pub fn from_socket(socket: impl Into<PathBuf>) -> Self {
         Self {
             socket: socket.into(),
             backend: SystemBackend::Niri,
             socket_mode: SocketMode::from_environment(),
+            supervision: None,
         }
     }
 
@@ -52,10 +75,9 @@ impl SystemDaemon {
     }
 
     pub fn run(self) -> Result<()> {
+        let supervision = self.supervision.clone();
         let bound = self.bind()?;
-        let _supervision = SupervisionListener::from_environment(SupervisionProfile::system())
-            .map(SupervisionListener::spawn)
-            .transpose()?;
+        let _supervision = supervision.map(SupervisionListener::spawn).transpose()?;
         eprintln!("persona-system-daemon socket={}", bound.socket.display());
         bound.serve_forever()
     }
