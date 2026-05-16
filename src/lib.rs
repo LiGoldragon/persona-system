@@ -17,11 +17,11 @@ pub use event::FocusState;
 pub use niri::{FocusTracker, NiriEvent, NiriFocusSource, NiriWindowSnapshot, NiriWindows};
 pub use niri_focus::{ApplyNiriEvent, FocusStatistics, FocusStatisticsProbe, ReadFocusStatistics};
 pub use signal_persona_system::{
-    FocusObservation, FocusSnapshot, FocusSubscription, FocusUnsubscription, NiriWindowId,
+    FocusObservation, FocusSnapshot, FocusSubscription, FocusSubscriptionToken, NiriWindowId,
     ObservationGeneration, ObservationTargetMissing, SubscriptionAccepted, SubscriptionKind,
-    SystemBackend, SystemEvent, SystemHealth, SystemOperationKind, SystemReadiness, SystemRequest,
-    SystemRequestUnimplemented, SystemStatus, SystemStatusQuery, SystemTarget,
-    SystemUnimplementedReason, WindowClosed,
+    SubscriptionRetracted, SystemBackend, SystemEvent, SystemHealth, SystemOperationKind,
+    SystemReadiness, SystemRequest, SystemRequestUnimplemented, SystemStatus, SystemStatusQuery,
+    SystemTarget, SystemUnimplementedReason, WindowClosed,
 };
 pub use supervision::{
     SupervisionFrameCodec, SupervisionListener, SupervisionProfile, SupervisionSocketMode,

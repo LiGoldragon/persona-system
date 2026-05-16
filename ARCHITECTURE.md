@@ -44,29 +44,59 @@ flowchart LR
 - event subscription surfaces for consumers;
 - backend adapter traits or data-bearing adapter objects.
 
-## 1.5 · Supervision-relation reception (skeleton mode)
+## 1.5 · Paused-state skeleton
 
-persona-system is **deferred** — its focus-tracker work pauses
-until a real consumer surfaces. But the daemon must still come up as a
-supervised first-stack component so the prototype's "all six daemons
-ready" witness can pass.
+persona-system is **paused** — domain-level focus work waits on a real
+consumer (window-focus-aware notifications, multi-engine UI, multi-monitor
+layout). The daemon still comes up as a supervised first-stack component so
+the prototype's "all six daemons ready" witness passes, and the FocusTracker
+exists today as a real Kameo actor (state-bearing, message-driven, not a
+marker) ready for the Niri event-stream path that activates on unpause.
 
-In **skeleton mode**, the daemon:
+The component skeleton is honest:
 
-1. Reads its `signal-persona::SpawnEnvelope` at startup; binds
-   `system.sock` at mode 0600 by applying the `PERSONA_SOCKET_MODE`
-   value from the Persona spawn envelope.
-2. Answers `signal-persona::SupervisionRequest` from a `SupervisionPhase`
-   actor — `ComponentReady { component_started_at }` once the socket is
-   bound; `ComponentHealthReport { health: Running }`.
-3. Returns `SystemReply::SystemRequestUnimplemented` for every domain
-   request (focus subscription, focus snapshot, system status query) —
-   the contract decodes the variant, the daemon answers honestly that
-   the behavior is not built in this wave.
+1. The daemon reads its `signal-persona::SpawnEnvelope` at startup and binds
+   `system.sock` at mode 0600 by applying the `PERSONA_SOCKET_MODE` value
+   from that envelope.
+2. The daemon answers `signal-persona::SupervisionRequest` from a
+   `SupervisionPhase` actor — `ComponentReady { component_started_at }` once
+   the socket is bound; `ComponentHealthReport { health: Running }`.
+3. The daemon returns `SystemReply::SystemRequestUnimplemented` for every
+   unbuilt domain request (focus subscription, focus unsubscription, focus
+   snapshot). The contract decodes each variant; the reply is typed and
+   closed, never a hang or untyped text error.
+4. `FocusTracker` is a real Kameo actor with `target`, `id`, `last`,
+   `generations`, `workspace_id`, `synthetic_generation`,
+   `applied_event_count`, and `emitted_observation_count` state. Niri
+   event application goes through its message handler, not direct method
+   calls. It is exercised in tests today; it is not wired into a
+   supervised long-lived runtime yet.
 
-The Niri backend, FocusTracker, and privileged-action surfaces stay as
-existing design but do not run in skeleton mode. They activate when the
-deferral ends.
+**Deferred until a real consumer surfaces:**
+
+- The Niri event-stream push path activates and routes observations into
+  consumer subscriptions.
+- The `SystemPrivilegedRequest` surface — `ForceFocus`, `SuppressDrift` —
+  lands. Today it is named in design but has no code and no consumer
+  asking for it.
+- The privileged-vs-observation authorization boundary (which connection
+  class can request which actions) is settled when the first privileged
+  consumer concretizes the requirement.
+
+**Path A discipline applies when unpausing.** Focus subscription close is a
+reply-side `SystemReply::SubscriptionRetracted { subscription_id, reason }`
+event, not a request-side `FocusUnsubscription`. The retraction is causally
+tied to the `FocusSubscription` request that opened the stream; the producer
+emits exactly one retraction on consumer-initiated close, producer timeout,
+or backend error. Today's `FocusUnsubscription` variant is treated as a
+deferred decoded-and-unimplemented shape; the contract change to a reply-side
+retraction lands together with the live event-stream wiring.
+
+**Naming reopens on unpause.** `ForceFocus` is a negative name (states what
+the action overrides, not what it is). Before any privileged-action code
+lands, the verb is reframed positively per the workspace naming discipline —
+the rename happens when the first consumer concretizes the authority and
+effect the action carries.
 
 ## 2 · State and Ownership
 
