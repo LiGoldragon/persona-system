@@ -62,9 +62,9 @@ The component skeleton is honest:
    `SupervisionPhase` actor — `ComponentReady { component_started_at }` once
    the socket is bound; `ComponentHealthReport { health: Running }`.
 3. The daemon returns `SystemReply::SystemRequestUnimplemented` for every
-   unbuilt domain request (focus subscription, focus unsubscription, focus
-   snapshot). The contract decodes each variant; the reply is typed and
-   closed, never a hang or untyped text error.
+   unbuilt domain request (`FocusSubscription`, `FocusSubscriptionRetraction`,
+   `FocusSnapshot`). The contract decodes each variant; the reply is typed
+   and closed, never a hang or untyped text error.
 4. `FocusTracker` is a real Kameo actor with `target`, `id`, `last`,
    `generations`, `workspace_id`, `synthetic_generation`,
    `applied_event_count`, and `emitted_observation_count` state. Niri
@@ -83,14 +83,21 @@ The component skeleton is honest:
   class can request which actions) is settled when the first privileged
   consumer concretizes the requirement.
 
-**Path A discipline applies when unpausing.** Focus subscription close is a
-reply-side `SystemReply::SubscriptionRetracted { subscription_id, reason }`
-event, not a request-side `FocusUnsubscription`. The retraction is causally
-tied to the `FocusSubscription` request that opened the stream; the producer
-emits exactly one retraction on consumer-initiated close, producer timeout,
-or backend error. Today's `FocusUnsubscription` variant is treated as a
-deferred decoded-and-unimplemented shape; the contract change to a reply-side
-retraction lands together with the live event-stream wiring.
+**Subscription lifecycle applies when unpausing.** Focus subscription close
+follows the canonical five-state FSM named in
+`~/primary/skills/subscription-lifecycle.md`: typed
+`Subscribe FocusSubscription` request returns a typed
+`SubscriptionAccepted` snapshot reply carrying the per-stream
+`FocusSubscriptionToken`; the producer pushes typed `FocusObservation` /
+`WindowClosed` events on the `FocusEventStream`; the consumer sends a typed
+`Retract FocusSubscriptionRetraction(FocusSubscriptionToken)` request to
+close; the producer emits a final `SubscriptionRetracted` reply carrying
+the same token; the stream ends. Both the request-side retract verb and
+the reply-side acknowledgement are first-class. The `signal_channel!`
+macro at `signal-persona-system/src/lib.rs:303-330` enforces the pairing:
+the `close FocusSubscriptionRetraction` line in the stream block emits
+the typed `closed_stream()` discriminant. Raw socket close is not
+semantic protocol.
 
 **Naming reopens on unpause.** `ForceFocus` is a negative name (states what
 the action overrides, not what it is). Before any privileged-action code
